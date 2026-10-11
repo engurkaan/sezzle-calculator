@@ -1,0 +1,21 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Go
+backend/bin/
+backend/coverage.out
+backend/coverage.html
+
+# Node
+node_modules/
+frontend/dist/
+frontend/coverage/
+*.log
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
