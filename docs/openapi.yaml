@@ -1,0 +1,185 @@
+openapi: 3.1.0
+info:
+  title: Calculator API
+  version: 1.0.0
+  description: |
+    Stateless arithmetic service. Every operation is a `POST` to
+    `/api/v1/{operation}` with a JSON body of operands.
+
+    All responses are JSON. Failures use one error envelope with a stable,
+    machine-readable `code`:
+
+    | Status | When |
+    | ------ | ---- |
+    | 400 | The body is malformed, has missing, extra or non-numeric operands, or a number outside the float64 range |
+    | 404 | Unknown operation or route |
+    | 405 | Wrong HTTP method (the `Allow` header lists the valid ones) |
+    | 413 | The body is larger than 1 KB |
+    | 415 | `Content-Type` is not `application/json` |
+    | 422 | The request is valid but has no finite answer (division by zero, square root of a negative number, overflow) |
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/v1/{operation}:
+    post:
+      summary: Perform a two-operand operation
+      operationId: calculateBinary
+      parameters:
+        - name: operation
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [add, subtract, multiply, divide, power, percentage]
+          description: |
+            - `add`: a + b
+            - `subtract`: a − b
+            - `multiply`: a × b
+            - `divide`: a ÷ b
+            - `power`: a raised to the power b
+            - `percentage`: a percent of b, i.e. a × b ÷ 100
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BinaryOperands'
+            example: { a: 5, b: 3 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Result'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+  /api/v1/sqrt:
+    post:
+      summary: Square root
+      operationId: sqrt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnaryOperand'
+            example: { a: 144 }
+      responses:
+        '200':
+          $ref: '#/components/responses/Result'
+        '400':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+  /api/v1/operations:
+    get:
+      summary: List supported operations
+      operationId: listOperations
+      responses:
+        '200':
+          description: Supported operations and how many operands each takes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [operations]
+                properties:
+                  operations:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, operands]
+                      properties:
+                        name: { type: string, example: add }
+                        operands: { type: integer, enum: [1, 2], example: 2 }
+  /healthz:
+    get:
+      summary: Liveness probe
+      operationId: health
+      responses:
+        '200':
+          description: The service is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: ok }
+components:
+  schemas:
+    BinaryOperands:
+      type: object
+      additionalProperties: false
+      required: [a, b]
+      properties:
+        a: { type: number, description: Left operand }
+        b: { type: number, description: Right operand }
+    UnaryOperand:
+      type: object
+      additionalProperties: false
+      required: [a]
+      properties:
+        a: { type: number }
+    CalculationResult:
+      type: object
+      required: [operation, operands, result]
+      properties:
+        operation: { type: string, example: add }
+        operands:
+          type: array
+          items: { type: number }
+          example: [5, 3]
+        result: { type: number, example: 8 }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - INVALID_JSON
+                - INVALID_OPERAND
+                - MISSING_OPERAND
+                - UNEXPECTED_FIELD
+                - UNSUPPORTED_MEDIA_TYPE
+                - PAYLOAD_TOO_LARGE
+                - UNKNOWN_OPERATION
+                - NOT_FOUND
+                - METHOD_NOT_ALLOWED
+                - DIVISION_BY_ZERO
+                - NEGATIVE_SQUARE_ROOT
+                - RESULT_OUT_OF_RANGE
+                - INTERNAL_ERROR
+            message:
+              type: string
+              description: Human-readable explanation; may change, do not parse.
+      example:
+        error:
+          code: DIVISION_BY_ZERO
+          message: division by zero is undefined
+  responses:
+    Result:
+      description: The computed result.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CalculationResult'
+    Error:
+      description: The request failed; see `error.code`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
