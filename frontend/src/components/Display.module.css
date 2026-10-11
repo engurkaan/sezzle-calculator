@@ -1,0 +1,104 @@
+.display {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  min-height: 8.5rem;
+  padding: 1.25rem 1.25rem 1rem;
+  border-radius: var(--radius-lg);
+  background: var(--display-bg);
+  color: var(--display-fg);
+  overflow: hidden;
+}
+
+.expression {
+  min-height: 1.5rem;
+  max-width: 100%;
+  font-size: 1rem;
+  color: var(--display-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  unicode-bidi: plaintext;
+}
+
+.value {
+  max-width: 100%;
+  font-variant-numeric: tabular-nums;
+  font-weight: 300;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  transition: opacity 120ms ease;
+}
+
+.value::-webkit-scrollbar {
+  display: none;
+}
+
+.value[data-size='large'] {
+  font-size: 3.25rem;
+}
+
+.value[data-size='medium'] {
+  font-size: 2.25rem;
+}
+
+.value[data-size='small'] {
+  font-size: 1.5rem;
+}
+
+.value[data-error] {
+  font-size: 1.75rem;
+  font-weight: 400;
+  color: var(--danger);
+}
+
+/* Fades in only if a request takes noticeably long, so fast responses
+   do not flicker. */
+.spinner {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid var(--display-muted);
+  border-top-color: transparent;
+  border-radius: 50%;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.display[data-busy] .spinner {
+  visibility: visible;
+  animation:
+    appear 0s linear 150ms forwards,
+    spin 700ms linear infinite;
+}
+
+.display[data-busy] .value {
+  opacity: 0.6;
+}
+
+@keyframes appear {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .display[data-busy] .spinner {
+    animation: appear 0s linear 150ms forwards;
+  }
+}

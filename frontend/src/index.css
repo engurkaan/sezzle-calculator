@@ -1,3 +1,77 @@
+:root {
+  --bg: #eef0f3;
+  --surface: #ffffff;
+  --fg: #111827;
+  --muted: #6b7280;
+  --border: #d1d5db;
+  --shadow: 0 1px 2px rgb(17 24 39 / 0.06), 0 12px 32px -12px rgb(17 24 39 / 0.18);
+
+  --display-bg: #111827;
+  --display-fg: #f9fafb;
+  --display-muted: #9ca3af;
+
+  --key-bg: #f3f4f6;
+  --key-bg-hover: #e5e7eb;
+  --key-fg: #111827;
+  --fn-bg: #e5e7eb;
+  --fn-bg-hover: #d1d5db;
+  --fn-fg: #374151;
+  --op-bg: #e0e7ff;
+  --op-bg-hover: #c7d2fe;
+  --op-fg: #3730a3;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-fg: #ffffff;
+  --danger: #fca5a5;
+  --focus: #6366f1;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.125rem;
+  --radius-xl: 1.5rem;
+
+  color-scheme: light dark;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0f17;
+    --surface: #161b26;
+    --fg: #f3f4f6;
+    --muted: #9ca3af;
+    --border: #374151;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px -16px rgb(0 0 0 / 0.7);
+
+    --display-bg: #05070c;
+
+    --key-bg: #222938;
+    --key-bg-hover: #2c3547;
+    --key-fg: #f3f4f6;
+    --fn-bg: #2c3547;
+    --fn-bg-hover: #374156;
+    --fn-fg: #d1d5db;
+    --op-bg: #2a2f5c;
+    --op-bg-hover: #353b72;
+    --op-fg: #c7d2fe;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
+    --focus: #a5b4fc;
+  }
+}
+
 *,
 *::before,
 *::after {
@@ -6,10 +80,38 @@
 
 body {
   margin: 0;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+  min-height: 100vh;
+  min-height: 100dvh;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 1.5rem 1rem;
+}
+
+.app-footer {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
