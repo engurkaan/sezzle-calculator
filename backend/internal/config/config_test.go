@@ -23,18 +23,25 @@ func TestLoadDefaults(t *testing.T) {
 	if !slices.Equal(cfg.AllowedOrigins, []string{DefaultAllowedOrigins}) {
 		t.Errorf("AllowedOrigins = %v, want [%s]", cfg.AllowedOrigins, DefaultAllowedOrigins)
 	}
+	if cfg.StaticDir != "" {
+		t.Errorf("StaticDir = %q, want empty", cfg.StaticDir)
+	}
 }
 
 func TestLoadOverrides(t *testing.T) {
 	cfg, err := Load(env(map[string]string{
 		"PORT":            " 9090 ",
 		"ALLOWED_ORIGINS": "https://a.example, https://b.example/ ,,",
+		"STATIC_DIR":      "/srv/www",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Port != 9090 {
 		t.Errorf("Port = %d, want 9090", cfg.Port)
+	}
+	if cfg.StaticDir != "/srv/www" {
+		t.Errorf("StaticDir = %q, want /srv/www", cfg.StaticDir)
 	}
 	want := []string{"https://a.example", "https://b.example"}
 	if !slices.Equal(cfg.AllowedOrigins, want) {

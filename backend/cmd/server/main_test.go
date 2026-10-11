@@ -61,6 +61,10 @@ func TestRunServesAndShutsDown(t *testing.T) {
 		t.Fatalf("got %d result=%v, want 200 result=5", resp.StatusCode, body.Result)
 	}
 
+	if err := probe(getenv); err != nil {
+		t.Errorf("probe() = %v, want nil while the server is up", err)
+	}
+
 	cancel()
 	select {
 	case err := <-done:
@@ -82,5 +86,28 @@ func TestRunRejectsInvalidConfig(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	if err := run(context.Background(), getenv, logger, nil); err == nil {
 		t.Fatal("expected configuration error")
+	}
+}
+
+func TestRunRejectsMissingStaticDir(t *testing.T) {
+	getenv := func(key string) string {
+		if key == "STATIC_DIR" {
+			return t.TempDir() // exists but has no index.html
+		}
+		return ""
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if err := run(context.Background(), getenv, logger, nil); err == nil {
+		t.Fatal("expected static dir error")
+	}
+}
+
+func TestProbeFailsWhenServerIsDown(t *testing.T) {
+	port := strconv.Itoa(freePort(t))
+	if err := probe(func(string) string { return port }); err == nil {
+		t.Fatal("expected probe to fail with nothing listening")
+	}
+	if err := probe(func(string) string { return "bad" }); err == nil {
+		t.Fatal("expected probe to fail on invalid config")
 	}
 }

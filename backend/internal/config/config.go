@@ -20,6 +20,9 @@ type Config struct {
 	// AllowedOrigins lists the browser origins allowed by CORS
 	// (ALLOWED_ORIGINS, comma separated; "*" allows any origin).
 	AllowedOrigins []string
+	// StaticDir, when set, is a directory containing the built frontend to
+	// serve alongside the API (STATIC_DIR).
+	StaticDir string
 }
 
 // Addr returns the listen address for Port.
@@ -47,6 +50,8 @@ func Load(getenv func(string) string) (Config, error) {
 			cfg.AllowedOrigins = append(cfg.AllowedOrigins, o)
 		}
 	}
+
+	cfg.StaticDir = strings.TrimSpace(getenv("STATIC_DIR"))
 
 	return cfg, nil
 }
