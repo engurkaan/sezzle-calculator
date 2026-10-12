@@ -6,6 +6,7 @@ describe('toDisplayMessage', () => {
   it.each([
     ['DIVISION_BY_ZERO', 'Cannot divide by zero'],
     ['NEGATIVE_SQUARE_ROOT', 'Invalid input for √'],
+    ['NON_REAL_RESULT', 'Not a real number'],
     ['RESULT_OUT_OF_RANGE', 'Result out of range'],
     ['INVALID_OPERAND', 'Invalid number'],
     ['NETWORK_ERROR', 'Service unavailable'],

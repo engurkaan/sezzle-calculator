@@ -121,7 +121,7 @@ describe('Calculator', () => {
     expect(display()).toHaveTextContent('3')
     expect(calculate).toHaveBeenCalledOnce()
 
-    finish({ operation: 'add', operands: [2, 3], result: 5 })
+    finish({ operation: 'add', operands: ['2', '3'], result: '5' })
     await waitFor(() => expect(display()).toHaveTextContent('5'))
     expect(screen.getByRole('region', { name: 'Calculator' })).toHaveAttribute('aria-busy', 'false')
   })
@@ -149,7 +149,7 @@ describe('Calculator', () => {
     await waitFor(() => expect(display()).toHaveTextContent('5'))
     // The focused "3" key must not have been clicked as well.
     expect(calculate).toHaveBeenCalledOnce()
-    expect(calculate).toHaveBeenCalledWith({ operation: 'add', a: 2, b: 3 }, expect.anything())
+    expect(calculate).toHaveBeenCalledWith({ operation: 'add', a: '2', b: '3' }, expect.anything())
   })
 
   it('records history and recalls a previous result', async () => {
@@ -174,8 +174,20 @@ describe('Calculator', () => {
     const { user } = setup()
 
     await user.keyboard('1234567890123456')
-
     expect(display()).toHaveTextContent('1,234,567,890,123,456')
     expect(display()).toHaveAttribute('data-size', 'small')
+
+    await user.keyboard('7890')
+    expect(display()).toHaveTextContent('12,345,678,901,234,567,890')
+    expect(display()).toHaveAttribute('data-size', 'xsmall')
+  })
+
+  it('shows exact decimal results', async () => {
+    const { user } = setup()
+
+    await user.keyboard('.1*3-.3{Enter}')
+
+    await waitFor(() => expect(screen.getByTestId('expression')).toHaveTextContent('0.3 − 0.3 ='))
+    expect(display()).toHaveTextContent(/^0$/)
   })
 })

@@ -4,7 +4,7 @@ import styles from './History.module.css'
 
 interface HistoryProps {
   entries: HistoryEntry[]
-  onRecall: (value: number) => void
+  onRecall: (value: string) => void
   onClear: () => void
 }
 
@@ -36,7 +36,9 @@ export function History({ entries, onRecall, onClear }: HistoryProps) {
                   aria-label={`Use ${result} (${entry.expression} = ${result})`}
                 >
                   <span className={styles.expression}>{entry.expression} =</span>
-                  <span className={styles.result}>{result}</span>
+                  <span className={styles.result} data-long={result.length > 18 || undefined}>
+                    {result}
+                  </span>
                 </button>
               </li>
             )

@@ -159,7 +159,7 @@ describe('binary operations', () => {
 
   it('sends the operation to the backend instead of computing locally', () => {
     const state = calculatorReducer(press('12+7'), { type: 'equals' })
-    expect(state.pending?.request).toEqual({ operation: 'add', a: 12, b: 7 })
+    expect(state.pending?.request).toEqual({ operation: 'add', a: '12', b: '7' })
     expect(selectExpression(state)).toBe('12 + 7')
   })
 
@@ -224,6 +224,39 @@ describe('binary operations', () => {
   })
 })
 
+describe('decimal precision', () => {
+  it('sends typed numbers to the backend exactly as typed', () => {
+    const state = calculatorReducer(press('0.1+12345678901234567890'), { type: 'equals' })
+    expect(state.pending?.request).toEqual({
+      operation: 'add',
+      a: '0.1',
+      b: '12345678901234567890',
+    })
+  })
+
+  it('drops a trailing decimal point from typed operands', () => {
+    const state = calculatorReducer(press('5.*2.'), { type: 'equals' })
+    expect(state.pending?.request).toEqual({ operation: 'multiply', a: '5', b: '2' })
+  })
+
+  it('keeps results that float64 would corrupt', () => {
+    expect(display('.1*3-.3=')).toBe('0')
+    expect(display('9007199254740993+0=')).toBe('9,007,199,254,740,993')
+  })
+
+  it('keeps full precision between chained operations', () => {
+    // 1 ÷ 3 is held to 34 digits, so × 3 lands on 0.999… and displays as 1.
+    const state = press('1/3*3=')
+    expect(selectDisplay(state)).toBe('1')
+    expect(state.history[1]?.result).toMatch(/^0\.3{30,}/)
+  })
+
+  it('negates large computed values without losing digits', () => {
+    const state = calculatorReducer(press('10^40='), { type: 'toggleSign' })
+    expect(selectDisplay(state)).toBe('-1e+40')
+  })
+})
+
 describe('unary operations', () => {
   it('computes square roots', () => {
     expect(display('81r')).toBe('9')
@@ -276,7 +309,7 @@ describe('errors', () => {
   })
 
   it('reports overflow', () => {
-    expect(display('10^400=')).toBe('Result out of range')
+    expect(display('10^7000=')).toBe('Result out of range')
   })
 
   it('recovers when a digit is typed after an error', () => {
@@ -305,7 +338,7 @@ describe('pending requests', () => {
     for (const key of ['7', '+', '=', '<', 'n', 'r', '%', '.']) {
       expect(calculatorReducer(waiting, toAction(key))).toBe(waiting)
     }
-    expect(calculatorReducer(waiting, { type: 'recall', value: 1 })).toBe(waiting)
+    expect(calculatorReducer(waiting, { type: 'recall', value: '1' })).toBe(waiting)
   })
 
   it('cancels the request on clear', () => {
@@ -318,11 +351,11 @@ describe('pending requests', () => {
   it('ignores results for superseded requests', () => {
     const waiting = calculatorReducer(press('2+3'), { type: 'equals' })
     const id = waiting.pending?.id ?? 0
-    expect(calculatorReducer(waiting, { type: 'resolve', id: id + 1, result: 99 })).toBe(waiting)
+    expect(calculatorReducer(waiting, { type: 'resolve', id: id + 1, result: '99' })).toBe(waiting)
     expect(calculatorReducer(waiting, { type: 'reject', id: id + 1, message: 'x' })).toBe(waiting)
 
     const cleared = calculatorReducer(waiting, { type: 'clear' })
-    expect(calculatorReducer(cleared, { type: 'resolve', id, result: 5 })).toBe(cleared)
+    expect(calculatorReducer(cleared, { type: 'resolve', id, result: '5' })).toBe(cleared)
   })
 
   it('gives every request a fresh id, even across clears', () => {
@@ -349,26 +382,26 @@ describe('history', () => {
   it('records every completed calculation, newest first', () => {
     const state = press('2+3=r')
     expect(state.history.map(({ expression, result }) => ({ expression, result }))).toEqual([
-      { expression: '√5', result: Math.sqrt(5) },
-      { expression: '2 + 3', result: 5 },
+      { expression: '√5', result: String(Math.sqrt(5)) },
+      { expression: '2 + 3', result: '5' },
     ])
   })
 
   it(`keeps at most ${MAX_HISTORY} entries`, () => {
     const state = press('1+1' + '='.repeat(MAX_HISTORY + 5))
     expect(state.history).toHaveLength(MAX_HISTORY)
-    expect(state.history[0]?.result).toBe(MAX_HISTORY + 6)
+    expect(state.history[0]?.result).toBe(String(MAX_HISTORY + 6))
   })
 
   it('recalls a value as the current operand', () => {
     const base = press('2+')
-    const state = calculatorReducer(base, { type: 'recall', value: 40 })
+    const state = calculatorReducer(base, { type: 'recall', value: '40' })
     expect(selectDisplay(state)).toBe('40')
     expect(selectDisplay(press('=', state))).toBe('42')
   })
 
   it('recalls a value after an error', () => {
-    const state = calculatorReducer(press('1/0='), { type: 'recall', value: 7 })
+    const state = calculatorReducer(press('1/0='), { type: 'recall', value: '7' })
     expect(state.error).toBeNull()
     expect(selectDisplay(state)).toBe('7')
   })

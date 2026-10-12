@@ -8,11 +8,13 @@ import (
 	"github.com/engurkaan/sezzle-calculator/backend/internal/calculator"
 )
 
-// CalculationResponse is the success payload for every operation.
+// CalculationResponse is the success payload for every operation. Numbers are
+// encoded as decimal strings: JSON numbers would be parsed into binary floats
+// by most clients (including every browser), silently losing precision.
 type CalculationResponse struct {
-	Operation string    `json:"operation"`
-	Operands  []float64 `json:"operands"`
-	Result    float64   `json:"result"`
+	Operation string   `json:"operation"`
+	Operands  []string `json:"operands"`
+	Result    string   `json:"result"`
 }
 
 // OperationInfo describes one supported operation for discovery clients.
@@ -78,10 +80,14 @@ func handleCalculate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	formatted := make([]string, len(operands))
+	for i, o := range operands {
+		formatted[i] = calculator.Format(o)
+	}
 	writeJSON(w, http.StatusOK, CalculationResponse{
 		Operation: name,
-		Operands:  operands,
-		Result:    result,
+		Operands:  formatted,
+		Result:    calculator.Format(result),
 	})
 }
 
@@ -94,10 +100,10 @@ func domainError(err error) *apiError {
 		e.Code = CodeDivisionByZero
 	case errors.Is(err, calculator.ErrNegativeSqrt):
 		e.Code = CodeNegativeSquareRoot
-	case errors.Is(err, calculator.ErrNonFinite):
+	case errors.Is(err, calculator.ErrNonReal):
+		e.Code = CodeNonRealResult
+	case errors.Is(err, calculator.ErrOutOfRange):
 		e.Code = CodeResultOutOfRange
-	case errors.Is(err, calculator.ErrInvalidOperand):
-		e.Status, e.Code = http.StatusBadRequest, CodeInvalidOperand
 	default:
 		e.Status, e.Code, e.Message = http.StatusInternalServerError, CodeInternal, "internal server error"
 	}

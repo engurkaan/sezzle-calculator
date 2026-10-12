@@ -9,22 +9,26 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/cockroachdb/apd/v3"
+	"github.com/engurkaan/sezzle-calculator/backend/internal/calculator"
 )
 
 // maxBodyBytes caps request bodies. A valid request is a few dozen bytes, so
 // anything larger is rejected early instead of being read into memory.
 const maxBodyBytes = 1 << 10
 
-// operandsRequest is the wire format for every operation. Pointers let us
-// tell an omitted operand apart from an explicit zero.
+// operandsRequest is the wire format for every operation. Operands are kept
+// as raw JSON so that both numbers (5.25) and strings ("5.25") can be parsed
+// from their exact text, without a lossy detour through float64.
 type operandsRequest struct {
-	A *float64 `json:"a"`
-	B *float64 `json:"b"`
+	A json.RawMessage `json:"a"`
+	B json.RawMessage `json:"b"`
 }
 
 // decodeOperands parses and validates the request body, returning exactly
 // arity operands in order (a, then b).
-func decodeOperands(w http.ResponseWriter, r *http.Request, arity int) ([]float64, *apiError) {
+func decodeOperands(w http.ResponseWriter, r *http.Request, arity int) ([]*apd.Decimal, *apiError) {
 	if err := requireJSON(r); err != nil {
 		return nil, err
 	}
@@ -41,19 +45,56 @@ func decodeOperands(w http.ResponseWriter, r *http.Request, arity int) ([]float6
 		return nil, badRequest(CodeInvalidJSON, "request body must contain a single JSON object")
 	}
 
-	switch {
-	case req.A == nil:
-		return nil, badRequest(CodeMissingOperand, `operand "a" is required`)
-	case arity == 2 && req.B == nil:
-		return nil, badRequest(CodeMissingOperand, `operand "b" is required`)
-	case arity == 1 && req.B != nil:
-		return nil, badRequest(CodeUnexpectedField, `operand "b" is not accepted by this operation`)
+	fields := []struct {
+		name string
+		raw  json.RawMessage
+	}{{"a", req.A}, {"b", req.B}}
+
+	operands := make([]*apd.Decimal, 0, arity)
+	for i, f := range fields {
+		present := len(f.raw) > 0 && string(f.raw) != "null"
+		switch {
+		case i < arity && !present:
+			return nil, badRequest(CodeMissingOperand, fmt.Sprintf("operand %s is required", quote(f.name)))
+		case i >= arity && present:
+			return nil, badRequest(CodeUnexpectedField, fmt.Sprintf("operand %s is not accepted by this operation", quote(f.name)))
+		case i >= arity:
+			continue
+		}
+		d, err := parseOperand(f.name, f.raw)
+		if err != nil {
+			return nil, err
+		}
+		operands = append(operands, d)
+	}
+	return operands, nil
+}
+
+// parseOperand accepts a JSON number or a JSON string containing a decimal
+// number, and parses it exactly.
+func parseOperand(name string, raw json.RawMessage) (*apd.Decimal, *apiError) {
+	var text string
+	switch raw[0] {
+	case '"':
+		if err := json.Unmarshal(raw, &text); err != nil {
+			return nil, badRequest(CodeInvalidJSON, "request body is not valid JSON")
+		}
+	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		text = string(raw)
+	default:
+		return nil, badRequest(CodeInvalidOperand, fmt.Sprintf("operand %s must be a number", quote(name)))
 	}
 
-	if arity == 1 {
-		return []float64{*req.A}, nil
+	d, err := calculator.Parse(text)
+	switch {
+	case errors.Is(err, calculator.ErrTooManyDigits):
+		return nil, badRequest(CodeInvalidOperand, fmt.Sprintf("operand %s has more than %d significant digits", quote(name), calculator.Precision))
+	case errors.Is(err, calculator.ErrOperandRange):
+		return nil, badRequest(CodeInvalidOperand, fmt.Sprintf("operand %s is out of range", quote(name)))
+	case err != nil:
+		return nil, badRequest(CodeInvalidOperand, fmt.Sprintf("operand %s must be a number", quote(name)))
 	}
-	return []float64{*req.A, *req.B}, nil
+	return d, nil
 }
 
 func requireJSON(r *http.Request) *apiError {
@@ -87,14 +128,8 @@ func decodeError(err error) *apiError {
 	case errors.As(err, &syntaxErr), errors.Is(err, io.ErrUnexpectedEOF):
 		return badRequest(CodeInvalidJSON, "request body is not valid JSON")
 	case errors.As(err, &typeErr):
-		if typeErr.Field == "" {
-			return badRequest(CodeInvalidJSON, "request body must be a JSON object")
-		}
-		if strings.HasPrefix(typeErr.Value, "number") {
-			// The value was numeric but does not fit in a float64 (e.g. 1e400).
-			return badRequest(CodeInvalidOperand, fmt.Sprintf("operand %s is out of range", quote(typeErr.Field)))
-		}
-		return badRequest(CodeInvalidOperand, fmt.Sprintf("operand %s must be a number", quote(typeErr.Field)))
+		// Operands are raw JSON, so the only possible mismatch is the body itself.
+		return badRequest(CodeInvalidJSON, "request body must be a JSON object")
 	case strings.HasPrefix(err.Error(), "json: unknown field "):
 		// encoding/json does not export a type for this error.
 		field := strings.TrimPrefix(err.Error(), "json: unknown field ")

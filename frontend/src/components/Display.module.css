@@ -53,6 +53,10 @@
   font-size: 1.5rem;
 }
 
+.value[data-size='xsmall'] {
+  font-size: 1.125rem;
+}
+
 .value[data-error] {
   font-size: 1.75rem;
   font-weight: 400;

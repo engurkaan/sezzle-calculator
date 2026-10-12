@@ -6,14 +6,25 @@ export type UnaryOperation = 'sqrt'
 
 export type Operation = BinaryOperation | UnaryOperation
 
+/**
+ * A decimal number as text, e.g. "12.5", "-0.001" or "1.5e+40".
+ *
+ * Numbers cross the API as strings because JavaScript numbers are binary
+ * floats: parsing "0.1" or a 34-digit result into a `number` would silently
+ * change its value. The frontend never does arithmetic on them; it only
+ * forwards and formats them.
+ */
+export type DecimalString = string
+
 export type CalculationRequest =
-  { operation: BinaryOperation; a: number; b: number } | { operation: UnaryOperation; a: number }
+  | { operation: BinaryOperation; a: DecimalString; b: DecimalString }
+  | { operation: UnaryOperation; a: DecimalString }
 
 /** Success payload returned by `POST /api/v1/{operation}`. */
 export interface CalculationResponse {
   operation: Operation
-  operands: number[]
-  result: number
+  operands: DecimalString[]
+  result: DecimalString
 }
 
 /** Error codes produced by the backend. */
@@ -29,6 +40,7 @@ export type ServerErrorCode =
   | 'METHOD_NOT_ALLOWED'
   | 'DIVISION_BY_ZERO'
   | 'NEGATIVE_SQUARE_ROOT'
+  | 'NON_REAL_RESULT'
   | 'RESULT_OUT_OF_RANGE'
   | 'INTERNAL_ERROR'
 

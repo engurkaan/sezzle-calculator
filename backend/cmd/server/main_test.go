@@ -53,12 +53,12 @@ func TestRunServesAndShutsDown(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	var body struct{ Result float64 }
+	var body struct{ Result string }
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != http.StatusOK || body.Result != 5 {
-		t.Fatalf("got %d result=%v, want 200 result=5", resp.StatusCode, body.Result)
+	if resp.StatusCode != http.StatusOK || body.Result != "5" {
+		t.Fatalf("got %d result=%v, want 200 result=\"5\"", resp.StatusCode, body.Result)
 	}
 
 	if err := probe(getenv); err != nil {

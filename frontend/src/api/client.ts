@@ -110,13 +110,20 @@ function isErrorEnvelope(value: unknown): value is { error: { code: string; mess
   )
 }
 
+const DECIMAL_PATTERN = /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/
+
+/** Whether value is a finite decimal number in text form. */
+export function isDecimalString(value: unknown): value is string {
+  return typeof value === 'string' && DECIMAL_PATTERN.test(value)
+}
+
 function isCalculationResponse(value: unknown): value is CalculationResponse {
   return (
     isRecord(value) &&
     typeof value.operation === 'string' &&
     Array.isArray(value.operands) &&
-    typeof value.result === 'number' &&
-    Number.isFinite(value.result)
+    value.operands.every(isDecimalString) &&
+    isDecimalString(value.result)
   )
 }
 

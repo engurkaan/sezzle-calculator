@@ -32,7 +32,7 @@ describe('useCalculator', () => {
     expect(result.current.busy).toBe(false)
     expect(result.current.expression).toBe('6 × 7 =')
     expect(calculate).toHaveBeenCalledWith(
-      { operation: 'multiply', a: 6, b: 7 },
+      { operation: 'multiply', a: '6', b: '7' },
       expect.any(AbortSignal),
     )
   })

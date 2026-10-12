@@ -30,31 +30,31 @@ describe('createClient', () => {
   it('posts the operands as JSON to the operation endpoint', async () => {
     const fetch = vi
       .fn()
-      .mockResolvedValue(jsonResponse(200, { operation: 'add', operands: [2, 3], result: 5 }))
+      .mockResolvedValue(jsonResponse(200, { operation: 'add', operands: ['2', '3'], result: '5' }))
     const calculate = createClient({ baseUrl: 'http://api.test/', fetch })
 
-    const res = await calculate({ operation: 'add', a: 2, b: 3 })
+    const res = await calculate({ operation: 'add', a: '2', b: '3' })
 
-    expect(res).toEqual({ operation: 'add', operands: [2, 3], result: 5 })
+    expect(res).toEqual({ operation: 'add', operands: ['2', '3'], result: '5' })
     expect(fetch).toHaveBeenCalledOnce()
     const [url, init] = fetch.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('http://api.test/api/v1/add')
     expect(init.method).toBe('POST')
     expect(new Headers(init.headers).get('Content-Type')).toBe('application/json')
-    expect(JSON.parse(init.body as string)).toEqual({ a: 2, b: 3 })
+    expect(JSON.parse(init.body as string)).toEqual({ a: '2', b: '3' })
   })
 
   it('sends only `a` for unary operations', async () => {
     const fetch = vi
       .fn()
-      .mockResolvedValue(jsonResponse(200, { operation: 'sqrt', operands: [9], result: 3 }))
+      .mockResolvedValue(jsonResponse(200, { operation: 'sqrt', operands: ['9'], result: '3' }))
     const calculate = createClient({ fetch })
 
-    await calculate({ operation: 'sqrt', a: 9 })
+    await calculate({ operation: 'sqrt', a: '9' })
 
     const [url, init] = fetch.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('/api/v1/sqrt')
-    expect(JSON.parse(init.body as string)).toEqual({ a: 9 })
+    expect(JSON.parse(init.body as string)).toEqual({ a: '9' })
   })
 
   it('surfaces the server error code, message and status', async () => {
@@ -65,7 +65,7 @@ describe('createClient', () => {
     )
     const calculate = createClient({ fetch })
 
-    const err = await captureError(calculate({ operation: 'divide', a: 1, b: 0 }))
+    const err = await captureError(calculate({ operation: 'divide', a: '1', b: '0' }))
 
     expect(err.code).toBe('DIVISION_BY_ZERO')
     expect(err.message).toBe('division by zero is undefined')
@@ -76,7 +76,7 @@ describe('createClient', () => {
     const fetch = vi.fn().mockResolvedValue(new Response('Bad Gateway', { status: 502 }))
     const calculate = createClient({ fetch })
 
-    const err = await captureError(calculate({ operation: 'add', a: 1, b: 1 }))
+    const err = await captureError(calculate({ operation: 'add', a: '1', b: '1' }))
 
     expect(err.code).toBe('HTTP_ERROR')
     expect(err.status).toBe(502)
@@ -84,15 +84,18 @@ describe('createClient', () => {
 
   it.each([
     ['a non-JSON body', new Response('ok', { status: 200 })],
-    ['a missing result', jsonResponse(200, { operation: 'add', operands: [1, 1] })],
+    ['a missing result', jsonResponse(200, { operation: 'add', operands: ['1', '1'] })],
+    // Numbers must arrive as decimal strings; a JSON number may already have lost precision.
+    ['a numeric result', jsonResponse(200, { operation: 'add', operands: ['1', '1'], result: 2 })],
     [
-      'a non-numeric result',
-      jsonResponse(200, { operation: 'add', operands: [1, 1], result: '2' }),
+      'a non-decimal result',
+      jsonResponse(200, { operation: 'add', operands: ['1', '1'], result: 'NaN' }),
     ],
+    ['numeric operands', jsonResponse(200, { operation: 'add', operands: [1, 1], result: '2' })],
   ])('rejects a successful response with %s', async (_, response) => {
     const calculate = createClient({ fetch: vi.fn().mockResolvedValue(response) })
 
-    const err = await captureError(calculate({ operation: 'add', a: 1, b: 1 }))
+    const err = await captureError(calculate({ operation: 'add', a: '1', b: '1' }))
 
     expect(err.code).toBe('INVALID_RESPONSE')
   })
@@ -101,7 +104,7 @@ describe('createClient', () => {
     const fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
     const calculate = createClient({ fetch })
 
-    const err = await captureError(calculate({ operation: 'add', a: 1, b: 1 }))
+    const err = await captureError(calculate({ operation: 'add', a: '1', b: '1' }))
 
     expect(err.code).toBe('NETWORK_ERROR')
     expect(err.status).toBeUndefined()
@@ -119,7 +122,7 @@ describe('createClient', () => {
       const fetch = vi.fn(rejectOnAbort)
       const calculate = createClient({ fetch, timeoutMs: 1000 })
 
-      const pending = captureError(calculate({ operation: 'add', a: 1, b: 1 }))
+      const pending = captureError(calculate({ operation: 'add', a: '1', b: '1' }))
       await vi.advanceTimersByTimeAsync(1000)
       const err = await pending
 
@@ -131,10 +134,12 @@ describe('createClient', () => {
     it('clears the timer once the request settles', async () => {
       const fetch = vi
         .fn()
-        .mockResolvedValue(jsonResponse(200, { operation: 'add', operands: [1, 1], result: 2 }))
+        .mockResolvedValue(
+          jsonResponse(200, { operation: 'add', operands: ['1', '1'], result: '2' }),
+        )
       const calculate = createClient({ fetch, timeoutMs: 1000 })
 
-      await calculate({ operation: 'add', a: 1, b: 1 })
+      await calculate({ operation: 'add', a: '1', b: '1' })
 
       expect(vi.getTimerCount()).toBe(0)
     })
@@ -144,7 +149,7 @@ describe('createClient', () => {
     const calculate = createClient({ fetch: vi.fn(rejectOnAbort) })
     const controller = new AbortController()
 
-    const pending = calculate({ operation: 'add', a: 1, b: 1 }, controller.signal)
+    const pending = calculate({ operation: 'add', a: '1', b: '1' }, controller.signal)
     controller.abort()
 
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })

@@ -1,38 +1,82 @@
 import { describe, expect, it } from 'vitest'
-import { formatInput, formatNumber, formatOperand } from './format'
+import { decimalExponent, formatInput, formatNumber, formatOperand, negate } from './format'
 
 describe('formatNumber', () => {
   it.each([
-    [0, '0'],
-    [-0, '0'],
-    [7, '7'],
-    [-42, '-42'],
-    [1234567, '1,234,567'],
-    [0.25, '0.25'],
-    [0.1 + 0.2, '0.3'],
-    [1.1 * 1.1, '1.21'],
-    [1 / 3, '0.333333333333333'],
-    [-1234.5, '-1,234.5'],
-    [999_999_999_999_999, '999,999,999,999,999'],
-    [0.000001, '0.000001'],
-  ])('formats %d as %s', (value, expected) => {
+    ['0', '0'],
+    ['-0', '0'],
+    ['0.000', '0'],
+    ['7', '7'],
+    ['-42', '-42'],
+    ['1234567', '1,234,567'],
+    ['0.25', '0.25'],
+    ['12.50', '12.5'],
+    ['-1234.5', '-1,234.5'],
+    ['0.000001', '0.000001'],
+    // Precision beyond float64 survives formatting.
+    ['9007199254740993', '9,007,199,254,740,993'],
+    ['12345678901234567890', '12,345,678,901,234,567,890'],
+    // Rounded to 20 significant digits from the exact decimal text.
+    ['0.3333333333333333333333333333333333', '0.33333333333333333333'],
+    ['1.414213562373095048801688724209698', '1.4142135623730950488'],
+    ['0.6666666666666666666666666666666667', '0.66666666666666666667'],
+    // Guard digits: 34 nines round to 1 for display.
+    ['0.9999999999999999999999999999999999', '1'],
+  ])('formats %s as %s', (value, expected) => {
     expect(formatNumber(value)).toBe(expected)
   })
 
   it.each([
-    [1e15, '1e+15'],
-    [1.5e21, '1.5e+21'],
-    [-2.5e300, '-2.5e+300'],
-    [1e-7, '1e-7'],
-    [1.23456789e-10, '1.23456789e-10'],
-    [2 ** 64, '1.84467440737096e+19'],
-  ])('uses exponential notation for %d', (value, expected) => {
+    ['1e+20', '1e+20'],
+    ['123456789012345678901234567890', '1.234567890123456789e+29'],
+    ['99999999999999999999999', '1e+23'],
+    ['1.5e+40', '1.5e+40'],
+    ['-2.5e+300', '-2.5e+300'],
+    ['1e-7', '1e-7'],
+    ['0.000000123456789', '1.23456789e-7'],
+    ['9.99e+6144', '9.99e+6144'],
+    ['-1.25e-6143', '-1.25e-6143'],
+    ['1e+400', '1e+400'],
+  ])('uses scientific notation for %s', (value, expected) => {
     expect(formatNumber(value)).toBe(expected)
   })
 
-  it('never renders NaN or Infinity', () => {
-    expect(formatNumber(Number.NaN)).toBe('Error')
-    expect(formatNumber(Infinity)).toBe('Error')
+  it.each(['NaN', 'Infinity', '', '-', 'abc', '1,000'])(
+    'renders invalid input %j as Error',
+    (value) => {
+      expect(formatNumber(value)).toBe('Error')
+    },
+  )
+})
+
+describe('decimalExponent', () => {
+  it.each([
+    ['1234', 3],
+    ['1', 0],
+    ['0.05', -2],
+    ['-0.5', -1],
+    ['001.5', 0],
+    ['1.5e40', 40],
+    ['0.012e-3', -5],
+    ['.5', -1],
+  ])('of %s is %d', (value, expected) => {
+    expect(decimalExponent(value)).toBe(expected)
+  })
+
+  it.each(['0', '0.000', '-0', 'abc'])('of %s is null', (value) => {
+    expect(decimalExponent(value)).toBeNull()
+  })
+})
+
+describe('negate', () => {
+  it.each([
+    ['5', '-5'],
+    ['-5', '5'],
+    ['0.1', '-0.1'],
+    ['1e+40', '-1e+40'],
+    ['0', '0'],
+  ])('negates %s to %s', (value, expected) => {
+    expect(negate(value)).toBe(expected)
   })
 })
 
@@ -56,7 +100,7 @@ describe('formatInput', () => {
 
 describe('formatOperand', () => {
   it('wraps negative numbers in parentheses', () => {
-    expect(formatOperand(-3)).toBe('(-3)')
-    expect(formatOperand(3)).toBe('3')
+    expect(formatOperand('-3')).toBe('(-3)')
+    expect(formatOperand('3')).toBe('3')
   })
 })

@@ -1,4 +1,4 @@
-import type { CalculationRequest } from '../api/types'
+import type { CalculationRequest, DecimalString } from '../api/types'
 
 /** Operators that wait for a second operand before they are evaluated. */
 export type InfixOperator = 'add' | 'subtract' | 'multiply' | 'divide' | 'power'
@@ -11,7 +11,7 @@ export type InfixOperator = 'add' | 'subtract' | 'multiply' | 'divide' | 'power'
  * - `computed`: a value produced by the backend (or recalled from history).
  *   It can be used as an operand but not edited digit by digit.
  */
-export type Entry = { kind: 'typed'; text: string } | { kind: 'computed'; value: number }
+export type Entry = { kind: 'typed'; text: string } | { kind: 'computed'; value: DecimalString }
 
 /** What to do with the result of a request once it arrives. */
 export type Intent =
@@ -33,16 +33,16 @@ export interface PendingRequest {
 export interface HistoryEntry {
   id: number
   expression: string
-  result: number
+  result: DecimalString
 }
 
 export interface CalculatorState {
   entry: Entry | null
   /** Left operand of the pending operator. */
-  accumulator: number | null
+  accumulator: DecimalString | null
   operator: InfixOperator | null
   /** Remembered so that pressing `=` again repeats the last operation. */
-  lastOperation: { operator: InfixOperator; operand: number } | null
+  lastOperation: { operator: InfixOperator; operand: DecimalString } | null
   /** Expression that produced the computed entry, shown above the result. */
   lastExpression: string | null
   pending: PendingRequest | null
@@ -62,7 +62,7 @@ export type CalculatorAction =
   | { type: 'toggleSign' }
   | { type: 'backspace' }
   | { type: 'clear' }
-  | { type: 'recall'; value: number }
+  | { type: 'recall'; value: DecimalString }
   | { type: 'clearHistory' }
-  | { type: 'resolve'; id: number; result: number }
+  | { type: 'resolve'; id: number; result: DecimalString }
   | { type: 'reject'; id: number; message: string }

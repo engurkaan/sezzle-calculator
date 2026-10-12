@@ -5,10 +5,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
-
-	"github.com/engurkaan/sezzle-calculator/backend/internal/calculator"
 )
 
 // do sends a request through the API handler and returns the recorder.
@@ -45,19 +44,25 @@ func TestCalculateSuccess(t *testing.T) {
 		name         string
 		path         string
 		body         string
-		wantOperands []float64
-		wantResult   float64
+		wantOperands []string
+		wantResult   string
 	}{
-		{name: "add", path: "/api/v1/add", body: `{"a":5,"b":3}`, wantOperands: []float64{5, 3}, wantResult: 8},
-		{name: "subtract", path: "/api/v1/subtract", body: `{"a":5,"b":8}`, wantOperands: []float64{5, 8}, wantResult: -3},
-		{name: "multiply", path: "/api/v1/multiply", body: `{"a":-4,"b":2.5}`, wantOperands: []float64{-4, 2.5}, wantResult: -10},
-		{name: "divide", path: "/api/v1/divide", body: `{"a":1,"b":4}`, wantOperands: []float64{1, 4}, wantResult: 0.25},
-		{name: "power", path: "/api/v1/power", body: `{"a":2,"b":8}`, wantOperands: []float64{2, 8}, wantResult: 256},
-		{name: "percentage", path: "/api/v1/percentage", body: `{"a":15,"b":80}`, wantOperands: []float64{15, 80}, wantResult: 12},
-		{name: "sqrt", path: "/api/v1/sqrt", body: `{"a":49}`, wantOperands: []float64{49}, wantResult: 7},
-		{name: "explicit zero operands", path: "/api/v1/add", body: `{"a":0,"b":0}`, wantOperands: []float64{0, 0}, wantResult: 0},
-		{name: "scientific notation", path: "/api/v1/multiply", body: `{"a":1e3,"b":2E-1}`, wantOperands: []float64{1000, 0.2}, wantResult: 200},
-		{name: "fields in any order", path: "/api/v1/subtract", body: `{"b":1,"a":3}`, wantOperands: []float64{3, 1}, wantResult: 2},
+		{name: "add", path: "/api/v1/add", body: `{"a":5,"b":3}`, wantOperands: []string{"5", "3"}, wantResult: "8"},
+		{name: "subtract", path: "/api/v1/subtract", body: `{"a":5,"b":8}`, wantOperands: []string{"5", "8"}, wantResult: "-3"},
+		{name: "multiply", path: "/api/v1/multiply", body: `{"a":-4,"b":2.5}`, wantOperands: []string{"-4", "2.5"}, wantResult: "-10"},
+		{name: "divide", path: "/api/v1/divide", body: `{"a":1,"b":4}`, wantOperands: []string{"1", "4"}, wantResult: "0.25"},
+		{name: "power", path: "/api/v1/power", body: `{"a":2,"b":8}`, wantOperands: []string{"2", "8"}, wantResult: "256"},
+		{name: "percentage", path: "/api/v1/percentage", body: `{"a":15,"b":80}`, wantOperands: []string{"15", "80"}, wantResult: "12"},
+		{name: "sqrt", path: "/api/v1/sqrt", body: `{"a":49}`, wantOperands: []string{"49"}, wantResult: "7"},
+		{name: "explicit zero operands", path: "/api/v1/add", body: `{"a":0,"b":0}`, wantOperands: []string{"0", "0"}, wantResult: "0"},
+		{name: "scientific notation", path: "/api/v1/multiply", body: `{"a":1e3,"b":2E-1}`, wantOperands: []string{"1000", "0.2"}, wantResult: "200"},
+		{name: "fields in any order", path: "/api/v1/subtract", body: `{"b":1,"a":3}`, wantOperands: []string{"3", "1"}, wantResult: "2"},
+		{name: "string operands", path: "/api/v1/add", body: `{"a":"0.1","b":"0.2"}`, wantOperands: []string{"0.1", "0.2"}, wantResult: "0.3"},
+		{name: "decimal numbers are exact", path: "/api/v1/add", body: `{"a":0.1,"b":0.2}`, wantOperands: []string{"0.1", "0.2"}, wantResult: "0.3"},
+		{name: "beyond float64 precision", path: "/api/v1/add", body: `{"a":"9007199254740993","b":"1"}`, wantOperands: []string{"9007199254740993", "1"}, wantResult: "9007199254740994"},
+		{name: "number beyond float64 range", path: "/api/v1/multiply", body: `{"a":1e400,"b":2}`, wantOperands: []string{"1e+400", "2"}, wantResult: "2e+400"},
+		{name: "rounded to 34 digits", path: "/api/v1/divide", body: `{"a":"1","b":"3"}`, wantOperands: []string{"1", "3"}, wantResult: "0.3333333333333333333333333333333333"},
+		{name: "operands are normalised", path: "/api/v1/add", body: `{"a":"12.50","b":"-0"}`, wantOperands: []string{"12.5", "0"}, wantResult: "12.5"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -70,15 +75,10 @@ func TestCalculateSuccess(t *testing.T) {
 				t.Errorf("operation = %q, want %q", got.Operation, want)
 			}
 			if got.Result != tc.wantResult {
-				t.Errorf("result = %v, want %v", got.Result, tc.wantResult)
+				t.Errorf("result = %q, want %q", got.Result, tc.wantResult)
 			}
-			if len(got.Operands) != len(tc.wantOperands) {
-				t.Fatalf("operands = %v, want %v", got.Operands, tc.wantOperands)
-			}
-			for i := range got.Operands {
-				if got.Operands[i] != tc.wantOperands[i] {
-					t.Errorf("operands = %v, want %v", got.Operands, tc.wantOperands)
-				}
+			if !slices.Equal(got.Operands, tc.wantOperands) {
+				t.Errorf("operands = %q, want %q", got.Operands, tc.wantOperands)
 			}
 		})
 	}
@@ -86,7 +86,7 @@ func TestCalculateSuccess(t *testing.T) {
 
 func TestCalculateResponseShape(t *testing.T) {
 	rec := postJSON(t, "/api/v1/add", `{"a":5,"b":3}`)
-	want := `{"operation":"add","operands":[5,3],"result":8}` + "\n"
+	want := `{"operation":"add","operands":["5","3"],"result":"8"}` + "\n"
 	if rec.Body.String() != want {
 		t.Errorf("body = %q, want %q", rec.Body.String(), want)
 	}
@@ -105,8 +105,9 @@ func TestCalculateErrors(t *testing.T) {
 		// Domain errors: well-formed but not computable.
 		{name: "division by zero", path: "/api/v1/divide", body: `{"a":1,"b":0}`, wantStatus: 422, wantCode: CodeDivisionByZero},
 		{name: "negative sqrt", path: "/api/v1/sqrt", body: `{"a":-9}`, wantStatus: 422, wantCode: CodeNegativeSquareRoot},
-		{name: "overflowing result", path: "/api/v1/multiply", body: `{"a":1e308,"b":10}`, wantStatus: 422, wantCode: CodeResultOutOfRange},
-		{name: "complex result", path: "/api/v1/power", body: `{"a":-8,"b":0.5}`, wantStatus: 422, wantCode: CodeResultOutOfRange},
+		{name: "overflowing result", path: "/api/v1/multiply", body: `{"a":1e6000,"b":1e6000}`, wantStatus: 422, wantCode: CodeResultOutOfRange},
+		{name: "non-real result", path: "/api/v1/power", body: `{"a":-8,"b":0.5}`, wantStatus: 422, wantCode: CodeNonRealResult},
+		{name: "zero to a negative power", path: "/api/v1/power", body: `{"a":0,"b":-1}`, wantStatus: 422, wantCode: CodeDivisionByZero},
 
 		// Routing.
 		{name: "unknown operation", path: "/api/v1/modulo", body: `{"a":1,"b":2}`, wantStatus: 404, wantCode: CodeUnknownOperation},
@@ -134,9 +135,16 @@ func TestCalculateErrors(t *testing.T) {
 		{name: "missing b", path: "/api/v1/add", body: `{"a":2}`, wantStatus: 400, wantCode: CodeMissingOperand},
 		{name: "null operand", path: "/api/v1/add", body: `{"a":null,"b":2}`, wantStatus: 400, wantCode: CodeMissingOperand},
 		{name: "empty object", path: "/api/v1/sqrt", body: `{}`, wantStatus: 400, wantCode: CodeMissingOperand},
-		{name: "string operand", path: "/api/v1/add", body: `{"a":"1","b":2}`, wantStatus: 400, wantCode: CodeInvalidOperand},
+		{name: "non-numeric string", path: "/api/v1/add", body: `{"a":"one","b":2}`, wantStatus: 400, wantCode: CodeInvalidOperand},
+		{name: "NaN string", path: "/api/v1/add", body: `{"a":"NaN","b":2}`, wantStatus: 400, wantCode: CodeInvalidOperand},
+		{name: "Infinity string", path: "/api/v1/add", body: `{"a":"Infinity","b":2}`, wantStatus: 400, wantCode: CodeInvalidOperand},
+		{name: "formatted string", path: "/api/v1/add", body: `{"a":"1,000","b":2}`, wantStatus: 400, wantCode: CodeInvalidOperand},
 		{name: "boolean operand", path: "/api/v1/add", body: `{"a":1,"b":true}`, wantStatus: 400, wantCode: CodeInvalidOperand},
-		{name: "operand out of float64 range", path: "/api/v1/add", body: `{"a":1e400,"b":1}`, wantStatus: 400, wantCode: CodeInvalidOperand},
+		{name: "object operand", path: "/api/v1/add", body: `{"a":{"v":1},"b":2}`, wantStatus: 400, wantCode: CodeInvalidOperand},
+		{name: "array operand", path: "/api/v1/add", body: `{"a":[1],"b":2}`, wantStatus: 400, wantCode: CodeInvalidOperand},
+		{name: "too many digits", path: "/api/v1/add", body: `{"a":"12345678901234567890123456789012345","b":1}`, wantStatus: 400, wantCode: CodeInvalidOperand},
+		{name: "operand out of range", path: "/api/v1/add", body: `{"a":1e7000,"b":1}`, wantStatus: 400, wantCode: CodeInvalidOperand},
+		{name: "invalid escape in string", path: "/api/v1/add", body: `{"a":"\x","b":1}`, wantStatus: 400, wantCode: CodeInvalidJSON},
 		{name: "unknown field", path: "/api/v1/add", body: `{"a":1,"b":2,"c":3}`, wantStatus: 400, wantCode: CodeUnexpectedField},
 		{name: "b on unary operation", path: "/api/v1/sqrt", body: `{"a":4,"b":2}`, wantStatus: 400, wantCode: CodeUnexpectedField},
 	}
@@ -195,6 +203,8 @@ func TestErrorMessages(t *testing.T) {
 	}{
 		{name: "missing operand names the field", path: "/api/v1/divide", body: `{"a":1}`, want: `operand "b" is required`},
 		{name: "type error names the field", path: "/api/v1/add", body: `{"a":"x","b":1}`, want: `operand "a" must be a number`},
+		{name: "precision limit is explained", path: "/api/v1/add", body: `{"a":1,"b":"12345678901234567890123456789012345"}`, want: `operand "b" has more than 34 significant digits`},
+		{name: "range limit is explained", path: "/api/v1/add", body: `{"a":"1e9999","b":1}`, want: `operand "a" is out of range`},
 		{name: "unknown field is named", path: "/api/v1/add", body: `{"a":1,"b":1,"op":"x"}`, want: `unknown field "op"`},
 		{name: "division by zero", path: "/api/v1/divide", body: `{"a":1,"b":0}`, want: "division by zero is undefined"},
 	}
@@ -245,14 +255,5 @@ func TestDomainErrorFallsBackToInternal(t *testing.T) {
 	}
 	if e.Message == "boom" {
 		t.Error("internal error details must not leak to clients")
-	}
-}
-
-func TestInvalidOperandMapsToBadRequest(t *testing.T) {
-	// Not reachable over JSON (which has no NaN/Inf), but the mapping must
-	// stay correct if another transport is added.
-	e := domainError(calculator.ErrInvalidOperand)
-	if e.Status != http.StatusBadRequest || e.Code != CodeInvalidOperand {
-		t.Errorf("got %d %s, want 400 %s", e.Status, e.Code, CodeInvalidOperand)
 	}
 }

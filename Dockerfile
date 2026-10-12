@@ -14,7 +14,7 @@ RUN npm run build
 # --- Backend build ------------------------------------------------------------
 FROM golang:1.27-alpine AS backend
 WORKDIR /src
-COPY backend/go.mod ./
+COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server

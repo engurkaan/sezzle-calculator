@@ -20,6 +20,7 @@ const (
 	CodeMethodNotAllowed     = "METHOD_NOT_ALLOWED"
 	CodeDivisionByZero       = "DIVISION_BY_ZERO"
 	CodeNegativeSquareRoot   = "NEGATIVE_SQUARE_ROOT"
+	CodeNonRealResult        = "NON_REAL_RESULT"
 	CodeResultOutOfRange     = "RESULT_OUT_OF_RANGE"
 	CodeInternal             = "INTERNAL_ERROR"
 )

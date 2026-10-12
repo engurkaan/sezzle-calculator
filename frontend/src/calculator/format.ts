@@ -1,15 +1,29 @@
+import type { DecimalString } from '../api/types'
 import type { InfixOperator } from './types'
 
 /**
- * Significant digits shown for computed results. IEEE-754 doubles carry
- * 15–17 significant digits, and binary rounding noise lives in the last
- * one or two, so 15 hides artefacts such as 0.1 + 0.2 = 0.30000000000000004.
+ * Significant digits shown in the display. The backend keeps 34, so the
+ * extra digits act as guard digits: 1 ÷ 3 × 3 is computed as
+ * 0.999…9 (34 nines) but displays as 1, as on a hardware calculator.
  */
-const DISPLAY_PRECISION = 15
+export const DISPLAY_DIGITS = 20
 
-/** Magnitudes outside [MIN_PLAIN, MAX_PLAIN) are shown in exponential form. */
-const MAX_PLAIN = 1e15
-const MIN_PLAIN = 1e-6
+/** Exponents outside [MIN_PLAIN_EXPONENT, DISPLAY_DIGITS) use scientific notation. */
+const MIN_PLAIN_EXPONENT = -6
+
+// Intl.NumberFormat formats numeric *strings* as exact decimals, so values are
+// rounded for display without ever being converted to a binary float.
+const plain = new Intl.NumberFormat('en-US', { maximumSignificantDigits: DISPLAY_DIGITS })
+const mantissaFormat = new Intl.NumberFormat('en-US', {
+  maximumSignificantDigits: DISPLAY_DIGITS,
+  useGrouping: false,
+})
+
+// The TypeScript lib types predate string support in Intl.NumberFormat.
+const formatExact = (format: Intl.NumberFormat, value: DecimalString) =>
+  format.format(value as unknown as number)
+
+const DECIMAL_PATTERN = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/
 
 export const OPERATOR_SYMBOLS: Record<InfixOperator, string> = {
   add: '+',
@@ -19,27 +33,57 @@ export const OPERATOR_SYMBOLS: Record<InfixOperator, string> = {
   power: '^',
 }
 
-function groupThousands(integerDigits: string): string {
-  return integerDigits.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+/**
+ * Power of ten of the most significant digit of a decimal string
+ * ("1234" → 3, "0.05" → -2, "1.5e40" → 40), or null for zero and invalid input.
+ */
+export function decimalExponent(value: DecimalString): number | null {
+  const match = DECIMAL_PATTERN.exec(value)
+  if (!match) {
+    return null
+  }
+  const [, , integer = '', fraction = '', exponent = '0'] = match
+  const shift = Number(exponent)
+  const significantInteger = integer.replace(/^0+/, '')
+  if (significantInteger) {
+    return significantInteger.length - 1 + shift
+  }
+  const firstNonZero = fraction.search(/[1-9]/)
+  return firstNonZero === -1 ? null : shift - firstNonZero - 1
 }
 
-/** Formats a computed number for display. */
-export function formatNumber(value: number): string {
-  if (!Number.isFinite(value)) {
+/** Formats a computed decimal for display. */
+export function formatNumber(value: DecimalString): string {
+  if (!DECIMAL_PATTERN.test(value) || !/\d/.test(value)) {
     return 'Error'
   }
-  if (value === 0) {
+  const exponent = decimalExponent(value)
+  if (exponent === null) {
     return '0'
   }
-
-  const magnitude = Math.abs(value)
-  if (magnitude >= MAX_PLAIN || magnitude < MIN_PLAIN) {
-    const [mantissa = '', exponent = ''] = value.toExponential(DISPLAY_PRECISION - 1).split('e')
-    const trimmed = mantissa.includes('.') ? mantissa.replace(/\.?0+$/, '') : mantissa
-    return `${trimmed}e${exponent}`
+  if (exponent >= MIN_PLAIN_EXPONENT && exponent < DISPLAY_DIGITS) {
+    return formatExact(plain, value)
   }
+  return formatScientific(value, exponent)
+}
 
-  return formatInput(String(Number(value.toPrecision(DISPLAY_PRECISION))))
+/**
+ * Scientific notation built by hand: only the mantissa goes through Intl, as
+ * V8 renders strings beyond the float64 range (e.g. "1e+400") as "∞".
+ */
+function formatScientific(value: DecimalString, exponent: number): string {
+  const negative = value.startsWith('-')
+  const digits = value
+    .replace(/[eE].*$/, '')
+    .replace(/\D/g, '')
+    .replace(/^0+/, '')
+  let mantissa = formatExact(mantissaFormat, `${digits[0]}.${digits.slice(1)}`)
+  if (mantissa === '10') {
+    // Rounding carried into a new digit, e.g. 9.999… → 10.
+    mantissa = '1'
+    exponent++
+  }
+  return `${negative ? '-' : ''}${mantissa}e${exponent < 0 ? '-' : '+'}${Math.abs(exponent)}`
 }
 
 /**
@@ -52,11 +96,19 @@ export function formatInput(text: string): string {
     return text
   }
   const [, sign = '', integer = '', fraction = ''] = match
-  return `${sign}${groupThousands(integer || '0')}${fraction}`
+  return `${sign}${(integer || '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${fraction}`
 }
 
 /** Formats an operand inside an expression; negatives are parenthesised for clarity. */
-export function formatOperand(value: number): string {
+export function formatOperand(value: DecimalString): string {
   const formatted = formatNumber(value)
-  return value < 0 ? `(${formatted})` : formatted
+  return formatted.startsWith('-') ? `(${formatted})` : formatted
+}
+
+/** Negates a decimal string. Exact, so it needs no round trip to the backend. */
+export function negate(value: DecimalString): DecimalString {
+  if (decimalExponent(value) === null) {
+    return '0'
+  }
+  return value.startsWith('-') ? value.slice(1) : `-${value}`
 }

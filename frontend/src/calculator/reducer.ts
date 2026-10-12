@@ -1,5 +1,5 @@
-import type { CalculationRequest } from '../api/types'
-import { formatInput, formatNumber, formatOperand, OPERATOR_SYMBOLS } from './format'
+import type { CalculationRequest, DecimalString } from '../api/types'
+import { formatInput, formatNumber, formatOperand, negate, OPERATOR_SYMBOLS } from './format'
 import type {
   CalculatorAction,
   CalculatorState,
@@ -9,8 +9,11 @@ import type {
   PendingRequest,
 } from './types'
 
-/** Maximum number of significant digits the user may type. */
-export const MAX_INPUT_DIGITS = 16
+/**
+ * Maximum number of significant digits the user may type. Matches what the
+ * display can show; the backend itself accepts up to 34.
+ */
+export const MAX_INPUT_DIGITS = 20
 
 /** Maximum number of entries kept in the history panel. */
 export const MAX_HISTORY = 10
@@ -108,7 +111,7 @@ export function selectDisplay(state: CalculatorState): string {
   if (state.entry?.kind === 'computed') {
     return formatNumber(state.entry.value)
   }
-  return formatNumber(state.accumulator ?? 0)
+  return formatNumber(state.accumulator ?? '0')
 }
 
 /** Text for the secondary line above the display, e.g. "12 +" or "12 + 7 =". */
@@ -136,13 +139,14 @@ function reset(state: CalculatorState): CalculatorState {
   return { ...initialState, history: state.history, nextId: state.nextId }
 }
 
-function entryValue(entry: Entry): number {
-  return entry.kind === 'computed' ? entry.value : Number(entry.text)
+/** The entry as a decimal string for the API ("5." becomes "5"). */
+function entryValue(entry: Entry): DecimalString {
+  return entry.kind === 'computed' ? entry.value : entry.text.replace(/\.$/, '')
 }
 
 /** The number an operation would act on right now. */
-function currentOperand(state: CalculatorState): number {
-  return state.entry ? entryValue(state.entry) : (state.accumulator ?? 0)
+function currentOperand(state: CalculatorState): DecimalString {
+  return state.entry ? entryValue(state.entry) : (state.accumulator ?? '0')
 }
 
 function countDigits(text: string): number {
@@ -195,8 +199,8 @@ function toggleSign(state: CalculatorState): CalculatorState {
     const text = entry.text.startsWith('-') ? entry.text.slice(1) : '-' + entry.text
     return { ...state, entry: { kind: 'typed', text } }
   }
-  // Negation is exact in IEEE-754, so it is not worth a round trip.
-  return { ...state, entry: { kind: 'computed', value: entry.value === 0 ? 0 : -entry.value } }
+  // Flipping the sign of a decimal string is exact, so it is not worth a round trip.
+  return { ...state, entry: { kind: 'computed', value: negate(entry.value) } }
 }
 
 function pressOperator(state: CalculatorState, operator: InfixOperator): CalculatorState {
@@ -250,7 +254,7 @@ function pressPercent(state: CalculatorState): CalculatorState {
   const relative =
     state.accumulator !== null && (state.operator === 'add' || state.operator === 'subtract')
   if (relative) {
-    const base = state.accumulator ?? 0
+    const base = state.accumulator ?? '0'
     return request(
       state,
       { operation: 'percentage', a: percent, b: base },
@@ -260,7 +264,7 @@ function pressPercent(state: CalculatorState): CalculatorState {
   }
   return request(
     state,
-    { operation: 'percentage', a: percent, b: 1 },
+    { operation: 'percentage', a: percent, b: '1' },
     { kind: 'unary' },
     `${formatOperand(percent)}%`,
   )
@@ -268,9 +272,9 @@ function pressPercent(state: CalculatorState): CalculatorState {
 
 function infix(
   state: CalculatorState,
-  a: number,
+  a: DecimalString,
   operator: InfixOperator,
-  b: number,
+  b: DecimalString,
   intent: Intent,
 ): CalculatorState {
   const expression = `${formatOperand(a)} ${OPERATOR_SYMBOLS[operator]} ${formatOperand(b)}`
@@ -293,7 +297,7 @@ function request(
 function applyResult(
   state: CalculatorState,
   pending: PendingRequest,
-  result: number,
+  result: DecimalString,
 ): CalculatorState {
   const history = [
     { id: pending.id, expression: pending.expression, result },

@@ -94,5 +94,16 @@
   max-width: 100%;
   font-size: 1.25rem;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.result::-webkit-scrollbar {
+  display: none;
+}
+
+/* Long numbers stay on one line instead of breaking mid-number. */
+.result[data-long] {
+  font-size: 0.9375rem;
 }

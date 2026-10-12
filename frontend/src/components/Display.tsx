@@ -8,7 +8,8 @@ interface DisplayProps {
 }
 
 /** Picks a font size step so long numbers still fit on one line. */
-function sizeFor(text: string): 'large' | 'medium' | 'small' {
+function sizeFor(text: string): 'large' | 'medium' | 'small' | 'xsmall' {
+  if (text.length > 22) return 'xsmall'
   if (text.length > 16) return 'small'
   if (text.length > 10) return 'medium'
   return 'large'
