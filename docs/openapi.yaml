@@ -6,19 +6,29 @@ info:
     Stateless arithmetic service. Every operation is a `POST` to
     `/api/v1/{operation}` with a JSON body of operands.
 
+    Arithmetic is exact decimal with 34 significant digits (IEEE 754
+    decimal128 parameters, round-half-even): `0.1 + 0.2` is exactly `0.3`.
+    Results that cannot be represented exactly, such as `1/3`, are rounded to
+    34 digits. Operands may be sent as JSON numbers or as strings; both are
+    parsed from their exact text. Responses always encode numbers as strings,
+    because most JSON clients (including browsers) would otherwise parse them
+    into binary floats and lose precision.
+
     All responses are JSON. Failures use one error envelope with a stable,
     machine-readable `code`:
 
     | Status | When |
     | ------ | ---- |
-    | 400 | The body is malformed, has missing, extra or non-numeric operands, or a number outside the float64 range |
+    | 400 | The body is malformed, has missing, extra or non-numeric operands, an operand with more than 34 significant digits, or an operand outside the supported range (exponent −6143 to 6144) |
     | 404 | Unknown operation or route |
     | 405 | Wrong HTTP method (the `Allow` header lists the valid ones) |
     | 413 | The body is larger than 1 KB |
     | 415 | `Content-Type` is not `application/json` |
-    | 422 | The request is valid but has no finite answer (division by zero, square root of a negative number, overflow) |
+    | 422 | The request is valid but has no answer (division by zero, square root of a negative number, a non-real power, or a result outside the supported range) |
 servers:
   - url: http://localhost:8080
+# The calculator is a public, stateless service: no authentication.
+security: []
 paths:
   /api/v1/{operation}:
     post:
@@ -44,7 +54,11 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/BinaryOperands'
-            example: { a: 5, b: 3 }
+            examples:
+              strings:
+                value: { a: '0.1', b: '0.2' }
+              numbers:
+                value: { a: 5, b: 3 }
       responses:
         '200':
           $ref: '#/components/responses/Result'
@@ -68,7 +82,7 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UnaryOperand'
-            example: { a: 144 }
+            example: { a: '144' }
       responses:
         '200':
           $ref: '#/components/responses/Result'
@@ -116,29 +130,49 @@ paths:
                   status: { type: string, const: ok }
 components:
   schemas:
+    Operand:
+      description: |
+        A decimal number with at most 34 significant digits, either as a JSON
+        number or as a string in plain or scientific notation. NaN and
+        Infinity are rejected.
+      oneOf:
+        - type: number
+        - $ref: '#/components/schemas/DecimalString'
+    DecimalString:
+      type: string
+      pattern: '^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$'
+      examples: ['12.5', '-0.001', '1e+40']
     BinaryOperands:
       type: object
       additionalProperties: false
       required: [a, b]
       properties:
-        a: { type: number, description: Left operand }
-        b: { type: number, description: Right operand }
+        a: { $ref: '#/components/schemas/Operand' }
+        b: { $ref: '#/components/schemas/Operand' }
     UnaryOperand:
       type: object
       additionalProperties: false
       required: [a]
       properties:
-        a: { type: number }
+        a: { $ref: '#/components/schemas/Operand' }
     CalculationResult:
       type: object
       required: [operation, operands, result]
       properties:
         operation: { type: string, example: add }
         operands:
+          description: The operands as parsed, in canonical form.
           type: array
-          items: { type: number }
-          example: [5, 3]
-        result: { type: number, example: 8 }
+          items: { $ref: '#/components/schemas/DecimalString' }
+          example: ['0.1', '0.2']
+        result:
+          description: |
+            The result in canonical form: no trailing zeros, plain notation
+            for everyday magnitudes, scientific notation (e.g. "1e+40")
+            otherwise.
+          allOf: [{ $ref: '#/components/schemas/DecimalString' }]
+          example: '0.3'
+
     Error:
       type: object
       required: [error]
@@ -161,6 +195,7 @@ components:
                 - METHOD_NOT_ALLOWED
                 - DIVISION_BY_ZERO
                 - NEGATIVE_SQUARE_ROOT
+                - NON_REAL_RESULT
                 - RESULT_OUT_OF_RANGE
                 - INTERNAL_ERROR
             message:
