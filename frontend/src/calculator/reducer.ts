@@ -4,6 +4,7 @@ import type {
   CalculatorAction,
   CalculatorState,
   Entry,
+  HistoryEntry,
   InfixOperator,
   Intent,
   PendingRequest,
@@ -16,7 +17,7 @@ import type {
 export const MAX_INPUT_DIGITS = 20
 
 /** Maximum number of entries kept in the history panel. */
-export const MAX_HISTORY = 10
+export const MAX_HISTORY = 50
 
 export const initialState: CalculatorState = {
   entry: null,
@@ -28,6 +29,12 @@ export const initialState: CalculatorState = {
   error: null,
   history: [],
   nextId: 1,
+}
+
+/** Initial state, optionally restored with a previous session's history. */
+export function createInitialState(history: HistoryEntry[] = []): CalculatorState {
+  const nextId = history.reduce((max, entry) => Math.max(max, entry.id), 0) + 1
+  return { ...initialState, history: history.slice(0, MAX_HISTORY), nextId }
 }
 
 /**
@@ -55,6 +62,8 @@ export function calculatorReducer(
       return reset(state)
     case 'clearHistory':
       return { ...state, history: [] }
+    case 'deleteHistoryEntry':
+      return { ...state, history: state.history.filter((entry) => entry.id !== action.id) }
   }
 
   if (state.pending) {

@@ -17,7 +17,7 @@
 
 @media (min-width: 48rem) {
   .layout {
-    grid-template-columns: 22.5rem 17rem;
+    grid-template-columns: 22.5rem auto;
     max-width: none;
     width: auto;
     align-items: stretch;

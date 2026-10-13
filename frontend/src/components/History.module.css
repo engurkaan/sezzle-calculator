@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 1.25rem;
+  padding: 1rem 1.25rem 1.25rem;
   border-radius: var(--radius-xl);
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -12,17 +12,58 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
   min-height: 2rem;
-  margin-bottom: 0.75rem;
 }
 
 .title {
   margin: 0;
+  font-size: inherit;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-left: -0.375rem;
+  padding: 0.25rem 0.375rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.toggle:hover {
+  color: var(--fg);
+}
+
+.label {
   font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted);
+}
+
+.count {
+  min-width: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25rem;
+  text-align: center;
+  color: var(--fg);
+  background: var(--key-bg);
+}
+
+.chevron {
+  transition: transform 150ms ease;
+}
+
+.history[data-collapsed] .chevron {
+  transform: rotate(-90deg);
 }
 
 .clear {
@@ -31,6 +72,7 @@
   border-radius: 999px;
   font: inherit;
   font-size: 0.8125rem;
+  white-space: nowrap;
   color: var(--muted);
   background: transparent;
   cursor: pointer;
@@ -41,10 +83,28 @@
   border-color: var(--muted);
 }
 
+.clear[data-confirming] {
+  color: var(--danger-strong);
+  border-color: var(--danger-strong);
+}
+
+.toggle:focus-visible,
 .clear:focus-visible,
-.entry:focus-visible {
+.entry:focus-visible,
+.delete:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 0.75rem;
+}
+
+.content[hidden] {
+  display: none;
 }
 
 .empty {
@@ -63,13 +123,20 @@
   overflow-y: auto;
 }
 
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 .entry {
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: flex-end;
   gap: 0.125rem;
-  width: 100%;
-  padding: 0.5rem 0.75rem;
+  min-width: 0;
+  padding: 0.5rem 0.75rem 0.5rem 2.25rem;
   border: 0;
   border-radius: var(--radius-sm);
   font: inherit;
@@ -81,6 +148,41 @@
 
 .entry:hover {
   background: var(--key-bg);
+}
+
+.delete {
+  position: absolute;
+  left: 0.25rem;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.delete:hover {
+  color: var(--danger-strong);
+  background: var(--surface);
+}
+
+/* Reveal delete buttons on hover or keyboard focus; always show them on
+   touch screens, which have no hover. */
+.item:hover .delete,
+.item:focus-within .delete {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .delete {
+    opacity: 1;
+  }
 }
 
 .expression {
@@ -105,5 +207,38 @@
 
 /* Long numbers stay on one line instead of breaking mid-number. */
 .result[data-long] {
-  font-size: 0.9375rem;
+  font-size: 0.8125rem;
+}
+
+@media (min-width: 48rem) {
+  .history {
+    width: 17rem;
+  }
+
+  /* Collapsed on wide screens: a slim vertical rail beside the calculator. */
+  .history[data-collapsed] {
+    width: auto;
+    padding: 1rem 0.5rem;
+  }
+
+  .history[data-collapsed] .header {
+    justify-content: center;
+  }
+
+  .history[data-collapsed] .toggle {
+    flex-direction: column;
+    margin: 0;
+    padding: 0.5rem 0.25rem;
+  }
+
+  .history[data-collapsed] .label {
+    writing-mode: vertical-rl;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron,
+  .delete {
+    transition: none;
+  }
 }

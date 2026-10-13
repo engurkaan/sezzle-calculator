@@ -3,6 +3,7 @@ import { evaluate } from '../test/fakeBackend'
 import { toDisplayMessage } from './errors'
 import {
   calculatorReducer,
+  createInitialState,
   initialState,
   MAX_HISTORY,
   MAX_INPUT_DIGITS,
@@ -404,6 +405,23 @@ describe('history', () => {
     const state = calculatorReducer(press('1/0='), { type: 'recall', value: '7' })
     expect(state.error).toBeNull()
     expect(selectDisplay(state)).toBe('7')
+  })
+
+  it('deletes a single entry', () => {
+    const before = press('1+1=2+2=')
+    const [newest, oldest] = before.history
+    const state = calculatorReducer(before, { type: 'deleteHistoryEntry', id: oldest?.id ?? 0 })
+    expect(state.history).toEqual([newest])
+  })
+
+  it('restores a previous session with fresh ids', () => {
+    const restored = createInitialState([
+      { id: 7, expression: '1 + 1', result: '2' },
+      { id: 3, expression: '2 + 2', result: '4' },
+    ])
+    expect(restored.history).toHaveLength(2)
+    expect(restored.nextId).toBe(8)
+    expect(createInitialState().nextId).toBe(1)
   })
 
   it('can be cleared', () => {

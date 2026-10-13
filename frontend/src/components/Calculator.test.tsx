@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Calculate } from '../api/client'
@@ -166,8 +166,51 @@ describe('Calculator', () => {
     await click('Equals')
     await waitFor(() => expect(display()).toHaveTextContent('50'))
 
-    await user.click(within(history).getByRole('button', { name: 'Clear' }))
+    await user.click(within(history).getByRole('button', { name: 'Clear all' }))
+    await user.click(within(history).getByRole('button', { name: 'Confirm clear' }))
     expect(within(history).getByText('No calculations yet.')).toBeInTheDocument()
+  })
+
+  it('deletes a single history entry', async () => {
+    const { click, user } = setup()
+
+    await click('2', 'Add', '2', 'Equals')
+    await click('3', 'Add', '3', 'Equals')
+    const history = screen.getByRole('region', { name: 'History' })
+    await within(history).findByRole('button', { name: /use 6/i })
+
+    await user.click(within(history).getByRole('button', { name: 'Delete 2 + 2 = 4' }))
+
+    expect(within(history).queryByRole('button', { name: /use 4/i })).not.toBeInTheDocument()
+    expect(within(history).getByRole('button', { name: /use 6/i })).toBeInTheDocument()
+  })
+
+  it('keeps history across reloads', async () => {
+    const { click } = setup()
+    await click('6', 'Multiply', '7', 'Equals')
+    await screen.findByRole('button', { name: /use 42/i })
+
+    cleanup()
+    setup()
+
+    expect(screen.getByRole('button', { name: /use 42/i })).toBeInTheDocument()
+  })
+
+  it('remembers whether history is collapsed', async () => {
+    const { user } = setup()
+    await user.click(screen.getByRole('button', { name: 'History' }))
+    expect(screen.getByRole('button', { name: 'History' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+
+    cleanup()
+    setup()
+
+    expect(screen.getByRole('button', { name: 'History' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
   })
 
   it('shrinks the font for long numbers', async () => {

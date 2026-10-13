@@ -64,5 +64,6 @@ export type CalculatorAction =
   | { type: 'clear' }
   | { type: 'recall'; value: DecimalString }
   | { type: 'clearHistory' }
+  | { type: 'deleteHistoryEntry'; id: number }
   | { type: 'resolve'; id: number; result: DecimalString }
   | { type: 'reject'; id: number; message: string }
