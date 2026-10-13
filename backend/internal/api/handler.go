@@ -17,6 +17,12 @@ type CalculationResponse struct {
 	Result    string   `json:"result"`
 }
 
+// EvaluationResponse is the success payload for POST /api/v1/evaluate.
+type EvaluationResponse struct {
+	Expression string `json:"expression"`
+	Result     string `json:"result"`
+}
+
 // OperationInfo describes one supported operation for discovery clients.
 type OperationInfo struct {
 	Name     string `json:"name"`
@@ -27,6 +33,7 @@ type OperationInfo struct {
 //
 //	GET  /healthz
 //	GET  /api/v1/operations
+//	POST /api/v1/evaluate
 //	POST /api/v1/{operation}
 //
 // Every response under /api, including 404 and 405, uses a JSON body.
@@ -34,6 +41,7 @@ func NewHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealth)
 	mux.HandleFunc("GET /api/v1/operations", handleListOperations)
+	mux.HandleFunc("POST /api/v1/evaluate", handleEvaluate)
 	mux.HandleFunc("POST /api/v1/{operation}", handleCalculate)
 	// Less specific patterns catch everything the routes above do not, so
 	// that clients always receive the JSON error envelope.
@@ -68,13 +76,13 @@ func handleCalculate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	operands, apiErr := decodeOperands(w, r, arity)
+	operands, opts, apiErr := decodeOperands(w, r, name, arity)
 	if apiErr != nil {
 		writeError(w, apiErr)
 		return
 	}
 
-	result, err := calculator.Calculate(name, operands...)
+	result, err := calculator.Calculate(name, opts, operands...)
 	if err != nil {
 		writeError(w, domainError(err))
 		return
@@ -91,6 +99,45 @@ func handleCalculate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleEvaluate evaluates a whole expression with operator precedence.
+func handleEvaluate(w http.ResponseWriter, r *http.Request) {
+	var req evaluateRequest
+	if apiErr := decodeBody(w, r, &req); apiErr != nil {
+		writeError(w, apiErr)
+		return
+	}
+	if req.Expression == nil {
+		writeError(w, badRequest(CodeMissingOperand, `field "expression" is required`))
+		return
+	}
+	unit, apiErr := decodeAngleUnit(req.AngleUnit)
+	if apiErr != nil {
+		writeError(w, apiErr)
+		return
+	}
+
+	result, err := calculator.Evaluate(*req.Expression, calculator.Options{AngleUnit: unit})
+	if err != nil {
+		var syntaxErr *calculator.SyntaxError
+		if errors.As(err, &syntaxErr) {
+			writeError(w, &apiError{
+				Status:   http.StatusBadRequest,
+				Code:     CodeInvalidExpression,
+				Message:  syntaxErr.Error(),
+				Position: syntaxErr.Position,
+			})
+			return
+		}
+		writeError(w, domainError(err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, EvaluationResponse{
+		Expression: *req.Expression,
+		Result:     calculator.Format(result),
+	})
+}
+
 // domainError maps calculator errors onto HTTP errors. Domain failures are
 // reported as 422: the request was well formed but cannot be computed.
 func domainError(err error) *apiError {
@@ -104,6 +151,11 @@ func domainError(err error) *apiError {
 		e.Code = CodeNonRealResult
 	case errors.Is(err, calculator.ErrOutOfRange):
 		e.Code = CodeResultOutOfRange
+	case errors.Is(err, calculator.ErrLogDomain),
+		errors.Is(err, calculator.ErrFactorialDomain),
+		errors.Is(err, calculator.ErrTangentUndefined),
+		errors.Is(err, calculator.ErrArgumentTooLarge):
+		e.Code = CodeDomainError
 	default:
 		e.Status, e.Code, e.Message = http.StatusInternalServerError, CodeInternal, "internal server error"
 	}

@@ -236,7 +236,7 @@ func TestCalculate(t *testing.T) {
 			for i, s := range tc.operands {
 				operands[i] = mustParse(t, s)
 			}
-			got, err := Calculate(tc.op, operands...)
+			got, err := Calculate(tc.op, Options{}, operands...)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("error = %v, want %v", err, tc.wantErr)
 			}
@@ -269,7 +269,10 @@ func TestArity(t *testing.T) {
 }
 
 func TestOperations(t *testing.T) {
-	want := []string{"add", "divide", "multiply", "percentage", "power", "sqrt", "subtract"}
+	want := []string{
+		"add", "cos", "divide", "exp", "factorial", "ln", "log", "mod",
+		"multiply", "percentage", "power", "sin", "sqrt", "subtract", "tan",
+	}
 	if got := Operations(); !slices.Equal(got, want) {
 		t.Errorf("Operations() = %v, want %v", got, want)
 	}
@@ -284,7 +287,7 @@ func TestConcurrentUse(t *testing.T) {
 		go func() {
 			defer func() { done <- struct{}{} }()
 			for range 200 {
-				if _, err := Calculate("power", base, exponent); err != nil {
+				if _, err := Calculate("power", Options{}, base, exponent); err != nil {
 					t.Error(err)
 				}
 			}

@@ -63,6 +63,13 @@ func TestCalculateSuccess(t *testing.T) {
 		{name: "number beyond float64 range", path: "/api/v1/multiply", body: `{"a":1e400,"b":2}`, wantOperands: []string{"1e+400", "2"}, wantResult: "2e+400"},
 		{name: "rounded to 34 digits", path: "/api/v1/divide", body: `{"a":"1","b":"3"}`, wantOperands: []string{"1", "3"}, wantResult: "0.3333333333333333333333333333333333"},
 		{name: "operands are normalised", path: "/api/v1/add", body: `{"a":"12.50","b":"-0"}`, wantOperands: []string{"12.5", "0"}, wantResult: "12.5"},
+		{name: "sin in radians by default", path: "/api/v1/sin", body: `{"a":"0"}`, wantOperands: []string{"0"}, wantResult: "0"},
+		{name: "sin in degrees", path: "/api/v1/sin", body: `{"a":"30","angleUnit":"deg"}`, wantOperands: []string{"30"}, wantResult: "0.5"},
+		{name: "cos in explicit radians", path: "/api/v1/cos", body: `{"a":0,"angleUnit":"rad"}`, wantOperands: []string{"0"}, wantResult: "1"},
+		{name: "ln", path: "/api/v1/ln", body: `{"a":1}`, wantOperands: []string{"1"}, wantResult: "0"},
+		{name: "log", path: "/api/v1/log", body: `{"a":"1000"}`, wantOperands: []string{"1000"}, wantResult: "3"},
+		{name: "factorial", path: "/api/v1/factorial", body: `{"a":5}`, wantOperands: []string{"5"}, wantResult: "120"},
+		{name: "mod", path: "/api/v1/mod", body: `{"a":10,"b":3}`, wantOperands: []string{"10", "3"}, wantResult: "1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -108,6 +115,12 @@ func TestCalculateErrors(t *testing.T) {
 		{name: "overflowing result", path: "/api/v1/multiply", body: `{"a":1e6000,"b":1e6000}`, wantStatus: 422, wantCode: CodeResultOutOfRange},
 		{name: "non-real result", path: "/api/v1/power", body: `{"a":-8,"b":0.5}`, wantStatus: 422, wantCode: CodeNonRealResult},
 		{name: "zero to a negative power", path: "/api/v1/power", body: `{"a":0,"b":-1}`, wantStatus: 422, wantCode: CodeDivisionByZero},
+		{name: "log of zero", path: "/api/v1/log", body: `{"a":0}`, wantStatus: 422, wantCode: CodeDomainError},
+		{name: "factorial of a fraction", path: "/api/v1/factorial", body: `{"a":2.5}`, wantStatus: 422, wantCode: CodeDomainError},
+		{name: "tangent of 90 degrees", path: "/api/v1/tan", body: `{"a":90,"angleUnit":"deg"}`, wantStatus: 422, wantCode: CodeDomainError},
+		{name: "huge trig argument", path: "/api/v1/sin", body: `{"a":"1e50"}`, wantStatus: 422, wantCode: CodeDomainError},
+		{name: "invalid angle unit", path: "/api/v1/sin", body: `{"a":1,"angleUnit":"grad"}`, wantStatus: 400, wantCode: CodeInvalidAngleUnit},
+		{name: "angle unit on non-trig operation", path: "/api/v1/add", body: `{"a":1,"b":2,"angleUnit":"deg"}`, wantStatus: 400, wantCode: CodeUnexpectedField},
 
 		// Routing.
 		{name: "unknown operation", path: "/api/v1/modulo", body: `{"a":1,"b":2}`, wantStatus: 404, wantCode: CodeUnknownOperation},
@@ -115,6 +128,7 @@ func TestCalculateErrors(t *testing.T) {
 		{name: "nested api route", path: "/api/v1/add/extra", body: `{"a":1,"b":2}`, wantStatus: 404, wantCode: CodeNotFound},
 		{name: "GET on operation", method: http.MethodGet, path: "/api/v1/add", wantStatus: 405, wantCode: CodeMethodNotAllowed},
 		{name: "DELETE on operations list", method: http.MethodDelete, path: "/api/v1/operations", wantStatus: 405, wantCode: CodeMethodNotAllowed},
+		{name: "GET on evaluate", method: http.MethodGet, path: "/api/v1/evaluate", wantStatus: 405, wantCode: CodeMethodNotAllowed},
 
 		// Content negotiation and size.
 		{name: "missing content type", path: "/api/v1/add", contentType: "-", body: `{"a":1,"b":2}`, wantStatus: 415, wantCode: CodeUnsupportedMediaType},
@@ -236,7 +250,9 @@ func TestListOperations(t *testing.T) {
 	got := decode[map[string][]OperationInfo](t, rec)["operations"]
 	want := map[string]int{
 		"add": 2, "subtract": 2, "multiply": 2, "divide": 2,
-		"power": 2, "percentage": 2, "sqrt": 1,
+		"power": 2, "percentage": 2, "mod": 2, "sqrt": 1,
+		"ln": 1, "log": 1, "exp": 1, "factorial": 1,
+		"sin": 1, "cos": 1, "tan": 1,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d operations, want %d: %v", len(got), len(want), got)
@@ -255,5 +271,87 @@ func TestDomainErrorFallsBackToInternal(t *testing.T) {
 	}
 	if e.Message == "boom" {
 		t.Error("internal error details must not leak to clients")
+	}
+}
+
+func TestEvaluateEndpoint(t *testing.T) {
+	cases := []struct {
+		name       string
+		body       string
+		wantResult string
+	}{
+		{name: "precedence", body: `{"expression":"7+3*2"}`, wantResult: "13"},
+		{name: "parentheses", body: `{"expression":"(7+3)*2"}`, wantResult: "20"},
+		{name: "exact decimals", body: `{"expression":"0.1+0.2"}`, wantResult: "0.3"},
+		{name: "degrees", body: `{"expression":"sin(30)+cos(60)","angleUnit":"deg"}`, wantResult: "1"},
+		{name: "radians by default", body: `{"expression":"cos(0)"}`, wantResult: "1"},
+		{name: "percent of a sum", body: `{"expression":"200+10%"}`, wantResult: "220"},
+		{name: "functions and constants", body: `{"expression":"sqrt(16)*pi/pi+5!"}`, wantResult: "124"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := postJSON(t, "/api/v1/evaluate", tc.body)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
+			}
+			got := decode[EvaluationResponse](t, rec)
+			if got.Result != tc.wantResult {
+				t.Errorf("result = %q, want %q", got.Result, tc.wantResult)
+			}
+		})
+	}
+}
+
+func TestEvaluateEndpointResponseShape(t *testing.T) {
+	rec := postJSON(t, "/api/v1/evaluate", `{"expression":"7 + 3 * 2"}`)
+	want := `{"expression":"7 + 3 * 2","result":"13"}` + "\n"
+	if rec.Body.String() != want {
+		t.Errorf("body = %q, want %q", rec.Body.String(), want)
+	}
+}
+
+func TestEvaluateEndpointErrors(t *testing.T) {
+	cases := []struct {
+		name         string
+		body         string
+		wantStatus   int
+		wantCode     string
+		wantPosition int
+	}{
+		{name: "syntax error carries its position", body: `{"expression":"1+*2"}`, wantStatus: 400, wantCode: CodeInvalidExpression, wantPosition: 3},
+		{name: "unbalanced parentheses", body: `{"expression":"(1+2"}`, wantStatus: 400, wantCode: CodeInvalidExpression, wantPosition: 5},
+		{name: "empty expression", body: `{"expression":""}`, wantStatus: 400, wantCode: CodeInvalidExpression, wantPosition: 1},
+		{name: "missing expression", body: `{}`, wantStatus: 400, wantCode: CodeMissingOperand},
+		{name: "null expression", body: `{"expression":null}`, wantStatus: 400, wantCode: CodeMissingOperand},
+		{name: "non-string expression", body: `{"expression":42}`, wantStatus: 400, wantCode: CodeInvalidJSON},
+		{name: "unknown field", body: `{"expression":"1","x":1}`, wantStatus: 400, wantCode: CodeUnexpectedField},
+		{name: "invalid angle unit", body: `{"expression":"sin(1)","angleUnit":"turns"}`, wantStatus: 400, wantCode: CodeInvalidAngleUnit},
+		{name: "too long", body: `{"expression":"` + strings.Repeat("1+", 600) + `1"}`, wantStatus: 400, wantCode: CodeInvalidExpression, wantPosition: 1001},
+		{name: "division by zero", body: `{"expression":"1/(2-2)"}`, wantStatus: 422, wantCode: CodeDivisionByZero},
+		{name: "domain error", body: `{"expression":"tan(90)","angleUnit":"deg"}`, wantStatus: 422, wantCode: CodeDomainError},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := postJSON(t, "/api/v1/evaluate", tc.body)
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tc.wantStatus, rec.Body)
+			}
+			var got struct {
+				Error struct {
+					Code     string `json:"code"`
+					Message  string `json:"message"`
+					Position int    `json:"position"`
+				} `json:"error"`
+			}
+			if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Error.Code != tc.wantCode {
+				t.Errorf("code = %q, want %q", got.Error.Code, tc.wantCode)
+			}
+			if got.Error.Position != tc.wantPosition {
+				t.Errorf("position = %d, want %d", got.Error.Position, tc.wantPosition)
+			}
+		})
 	}
 }

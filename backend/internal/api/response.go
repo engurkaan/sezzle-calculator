@@ -13,6 +13,8 @@ const (
 	CodeInvalidOperand       = "INVALID_OPERAND"
 	CodeMissingOperand       = "MISSING_OPERAND"
 	CodeUnexpectedField      = "UNEXPECTED_FIELD"
+	CodeInvalidAngleUnit     = "INVALID_ANGLE_UNIT"
+	CodeInvalidExpression    = "INVALID_EXPRESSION"
 	CodeUnsupportedMediaType = "UNSUPPORTED_MEDIA_TYPE"
 	CodePayloadTooLarge      = "PAYLOAD_TOO_LARGE"
 	CodeUnknownOperation     = "UNKNOWN_OPERATION"
@@ -21,6 +23,7 @@ const (
 	CodeDivisionByZero       = "DIVISION_BY_ZERO"
 	CodeNegativeSquareRoot   = "NEGATIVE_SQUARE_ROOT"
 	CodeNonRealResult        = "NON_REAL_RESULT"
+	CodeDomainError          = "DOMAIN_ERROR"
 	CodeResultOutOfRange     = "RESULT_OUT_OF_RANGE"
 	CodeInternal             = "INTERNAL_ERROR"
 )
@@ -30,6 +33,8 @@ type apiError struct {
 	Status  int
 	Code    string
 	Message string
+	// Position is the 1-based character offset of a syntax error, if any.
+	Position int
 }
 
 type errorBody struct {
@@ -37,8 +42,9 @@ type errorBody struct {
 }
 
 type errorDetail struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code     string `json:"code"`
+	Message  string `json:"message"`
+	Position int    `json:"position,omitempty"`
 }
 
 // writeJSON serialises v as the response body with the given status code.
@@ -56,5 +62,5 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 //
 //	{"error": {"code": "...", "message": "..."}}
 func writeError(w http.ResponseWriter, e *apiError) {
-	writeJSON(w, e.Status, errorBody{Error: errorDetail{Code: e.Code, Message: e.Message}})
+	writeJSON(w, e.Status, errorBody{Error: errorDetail{Code: e.Code, Message: e.Message, Position: e.Position}})
 }

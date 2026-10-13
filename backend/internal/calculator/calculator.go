@@ -135,7 +135,7 @@ func Power(base, exponent *apd.Decimal) (*apd.Decimal, error) {
 	case base.Negative && !isInteger(exponent):
 		return nil, ErrNonReal
 	}
-	return apply(func(r *apd.Decimal) (apd.Condition, error) { return ctx.Pow(r, base, exponent) })
+	return guarded(func(r *apd.Decimal) (apd.Condition, error) { return workCtx.Pow(r, base, exponent) })
 }
 
 // Sqrt returns the square root of a, or ErrNegativeSqrt when a is negative.
@@ -187,18 +187,36 @@ func apply(op func(result *apd.Decimal) (apd.Condition, error)) (*apd.Decimal, e
 	return result, nil
 }
 
+// Options carries settings that only some operations use.
+type Options struct {
+	// AngleUnit applies to sin, cos and tan. The zero value means radians.
+	AngleUnit AngleUnit
+}
+
 // operation adapts a concrete function to a uniform, arity-checked signature.
 type operation struct {
 	arity int
-	apply func(operands []*apd.Decimal) (*apd.Decimal, error)
+	// usesAngle marks trigonometric operations, which honour Options.AngleUnit.
+	usesAngle bool
+	apply     func(operands []*apd.Decimal, opts Options) (*apd.Decimal, error)
 }
 
 func binary(fn func(a, b *apd.Decimal) (*apd.Decimal, error)) operation {
-	return operation{arity: 2, apply: func(o []*apd.Decimal) (*apd.Decimal, error) { return fn(o[0], o[1]) }}
+	return operation{arity: 2, apply: func(o []*apd.Decimal, _ Options) (*apd.Decimal, error) { return fn(o[0], o[1]) }}
 }
 
 func unary(fn func(a *apd.Decimal) (*apd.Decimal, error)) operation {
-	return operation{arity: 1, apply: func(o []*apd.Decimal) (*apd.Decimal, error) { return fn(o[0]) }}
+	return operation{arity: 1, apply: func(o []*apd.Decimal, _ Options) (*apd.Decimal, error) { return fn(o[0]) }}
+}
+
+func trig(fn func(x *apd.Decimal, unit AngleUnit) (*apd.Decimal, error)) operation {
+	return operation{arity: 1, usesAngle: true, apply: func(o []*apd.Decimal, opts Options) (*apd.Decimal, error) {
+		unit := opts.AngleUnit
+		if unit == "" {
+			unit = Radians
+		}
+		return fn(o[0], unit)
+	}}
 }
 
 // registry maps public operation names to their implementation. Adding a new
@@ -210,7 +228,15 @@ var registry = map[string]operation{
 	"divide":     binary(Divide),
 	"power":      binary(Power),
 	"percentage": binary(Percentage),
+	"mod":        binary(Mod),
 	"sqrt":       unary(Sqrt),
+	"ln":         unary(Ln),
+	"log":        unary(Log),
+	"exp":        unary(Exp),
+	"factorial":  unary(Factorial),
+	"sin":        trig(Sin),
+	"cos":        trig(Cos),
+	"tan":        trig(Tan),
 }
 
 // Arity reports how many operands the named operation expects and whether the
@@ -218,6 +244,11 @@ var registry = map[string]operation{
 func Arity(name string) (int, bool) {
 	op, ok := registry[name]
 	return op.arity, ok
+}
+
+// UsesAngleUnit reports whether the named operation honours Options.AngleUnit.
+func UsesAngleUnit(name string) bool {
+	return registry[name].usesAngle
 }
 
 // Operations returns the names of all supported operations in sorted order.
@@ -232,7 +263,7 @@ func Operations() []string {
 
 // Calculate runs the named operation after validating the operation name and
 // the operand count. Operands should come from Parse.
-func Calculate(name string, operands ...*apd.Decimal) (*apd.Decimal, error) {
+func Calculate(name string, opts Options, operands ...*apd.Decimal) (*apd.Decimal, error) {
 	op, ok := registry[name]
 	if !ok {
 		return nil, ErrUnknownOperation
@@ -240,5 +271,5 @@ func Calculate(name string, operands ...*apd.Decimal) (*apd.Decimal, error) {
 	if len(operands) != op.arity {
 		return nil, ErrOperandCount
 	}
-	return op.apply(operands)
+	return op.apply(operands, opts)
 }

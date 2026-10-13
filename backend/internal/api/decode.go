@@ -14,35 +14,76 @@ import (
 	"github.com/engurkaan/sezzle-calculator/backend/internal/calculator"
 )
 
-// maxBodyBytes caps request bodies. A valid request is a few dozen bytes, so
-// anything larger is rejected early instead of being read into memory.
-const maxBodyBytes = 1 << 10
+// maxBodyBytes caps request bodies. The largest valid request is an
+// expression of calculator.MaxExpressionLength characters, so anything larger
+// is rejected early instead of being read into memory.
+const maxBodyBytes = 4 << 10
 
 // operandsRequest is the wire format for every operation. Operands are kept
 // as raw JSON so that both numbers (5.25) and strings ("5.25") can be parsed
 // from their exact text, without a lossy detour through float64.
 type operandsRequest struct {
-	A json.RawMessage `json:"a"`
-	B json.RawMessage `json:"b"`
+	A         json.RawMessage `json:"a"`
+	B         json.RawMessage `json:"b"`
+	AngleUnit *string         `json:"angleUnit"`
 }
 
-// decodeOperands parses and validates the request body, returning exactly
-// arity operands in order (a, then b).
-func decodeOperands(w http.ResponseWriter, r *http.Request, arity int) ([]*apd.Decimal, *apiError) {
+// evaluateRequest is the wire format for POST /api/v1/evaluate.
+type evaluateRequest struct {
+	Expression *string `json:"expression"`
+	AngleUnit  *string `json:"angleUnit"`
+}
+
+// decodeBody reads a single JSON object into v, enforcing the content type,
+// the size limit and the absence of unknown fields or trailing data.
+func decodeBody(w http.ResponseWriter, r *http.Request, v any) *apiError {
 	if err := requireJSON(r); err != nil {
-		return nil, err
+		return err
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 
-	var req operandsRequest
-	if err := dec.Decode(&req); err != nil {
-		return nil, decodeError(err)
+	if err := dec.Decode(v); err != nil {
+		return decodeError(err)
 	}
 	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return nil, badRequest(CodeInvalidJSON, "request body must contain a single JSON object")
+		return badRequest(CodeInvalidJSON, "request body must contain a single JSON object")
+	}
+	return nil
+}
+
+// decodeAngleUnit validates the optional angleUnit field.
+func decodeAngleUnit(raw *string) (calculator.AngleUnit, *apiError) {
+	if raw == nil {
+		return calculator.Radians, nil
+	}
+	unit, err := calculator.ParseAngleUnit(*raw)
+	if err != nil {
+		return "", badRequest(CodeInvalidAngleUnit, err.Error())
+	}
+	return unit, nil
+}
+
+// decodeOperands parses and validates the request body for the named
+// operation, returning exactly arity operands in order (a, then b).
+func decodeOperands(w http.ResponseWriter, r *http.Request, name string, arity int) ([]*apd.Decimal, calculator.Options, *apiError) {
+	var req operandsRequest
+	if err := decodeBody(w, r, &req); err != nil {
+		return nil, calculator.Options{}, err
+	}
+
+	var opts calculator.Options
+	if req.AngleUnit != nil {
+		if !calculator.UsesAngleUnit(name) {
+			return nil, opts, badRequest(CodeUnexpectedField, fmt.Sprintf("operation %s does not accept angleUnit", quote(name)))
+		}
+		unit, err := decodeAngleUnit(req.AngleUnit)
+		if err != nil {
+			return nil, opts, err
+		}
+		opts.AngleUnit = unit
 	}
 
 	fields := []struct {
@@ -55,19 +96,19 @@ func decodeOperands(w http.ResponseWriter, r *http.Request, arity int) ([]*apd.D
 		present := len(f.raw) > 0 && string(f.raw) != "null"
 		switch {
 		case i < arity && !present:
-			return nil, badRequest(CodeMissingOperand, fmt.Sprintf("operand %s is required", quote(f.name)))
+			return nil, opts, badRequest(CodeMissingOperand, fmt.Sprintf("operand %s is required", quote(f.name)))
 		case i >= arity && present:
-			return nil, badRequest(CodeUnexpectedField, fmt.Sprintf("operand %s is not accepted by this operation", quote(f.name)))
+			return nil, opts, badRequest(CodeUnexpectedField, fmt.Sprintf("operand %s is not accepted by this operation", quote(f.name)))
 		case i >= arity:
 			continue
 		}
 		d, err := parseOperand(f.name, f.raw)
 		if err != nil {
-			return nil, err
+			return nil, opts, err
 		}
 		operands = append(operands, d)
 	}
-	return operands, nil
+	return operands, opts, nil
 }
 
 // parseOperand accepts a JSON number or a JSON string containing a decimal
