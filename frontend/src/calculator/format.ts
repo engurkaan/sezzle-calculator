@@ -31,6 +31,7 @@ export const OPERATOR_SYMBOLS: Record<InfixOperator, string> = {
   multiply: '×',
   divide: '÷',
   power: '^',
+  mod: 'mod',
 }
 
 /**

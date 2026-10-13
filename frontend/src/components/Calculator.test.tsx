@@ -1,16 +1,17 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { Calculate } from '../api/client'
+import type { Calculate, CalculatorApi } from '../api/client'
 import type { CalculationResponse } from '../api/types'
-import { fakeCalculate } from '../test/fakeBackend'
+import { createFakeApi, fakeCalculate } from '../test/fakeBackend'
 import { Calculator } from './Calculator'
 
-function setup(calculate: Calculate = fakeCalculate) {
+function setup(backend: Calculate | CalculatorApi = createFakeApi()) {
   const user = userEvent.setup()
-  render(<Calculator calculate={calculate} />)
-  const keypad = screen.getByRole('group', { name: 'Keypad' })
-  const key = (name: string) => within(keypad).getByRole('button', { name })
+  const api = typeof backend === 'function' ? { ...createFakeApi(), calculate: backend } : backend
+  render(<Calculator api={api} />)
+  const calculator = screen.getByRole('region', { name: 'Calculator' })
+  const key = (name: string) => within(calculator).getByRole('button', { name })
   const click = async (...names: string[]) => {
     for (const name of names) {
       await user.click(key(name))
@@ -211,6 +212,116 @@ describe('Calculator', () => {
       'aria-expanded',
       'false',
     )
+  })
+
+  it('starts in basic immediate mode without scientific keys', () => {
+    setup()
+    expect(screen.getByRole('radio', { name: 'Basic' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Immediate' })).toBeChecked()
+    expect(screen.queryByRole('group', { name: 'Scientific keys' })).not.toBeInTheDocument()
+  })
+
+  it('shows scientific keys and the angle unit in scientific mode', async () => {
+    const { user, key } = setup()
+
+    await user.click(screen.getByRole('radio', { name: 'Scientific' }))
+
+    const pad = screen.getByRole('group', { name: 'Scientific keys' })
+    for (const name of ['Sine', 'Natural logarithm', 'Factorial', 'Pi', 'Modulo', 'Square']) {
+      expect(within(pad).getByRole('button', { name })).toBeInTheDocument()
+    }
+    expect(screen.getAllByText('DEG')).toHaveLength(2)
+    expect(key('Angle unit: degrees')).toHaveTextContent('DEG')
+  })
+
+  it('computes scientific functions in immediate mode', async () => {
+    const calculate = vi.fn<Calculate>(fakeCalculate)
+    const { user, click } = setup(calculate)
+    await user.click(screen.getByRole('radio', { name: 'Scientific' }))
+
+    await click('3', '0', 'Sine')
+
+    await waitFor(() => expect(display()).toHaveTextContent('0.5'))
+    expect(screen.getByTestId('expression')).toHaveTextContent('sin(30°) =')
+    expect(calculate).toHaveBeenCalledWith(
+      { operation: 'sin', a: '30', angleUnit: 'deg' },
+      expect.any(AbortSignal),
+    )
+  })
+
+  it('switches the angle unit', async () => {
+    const calculate = vi.fn<Calculate>(fakeCalculate)
+    const { user, click } = setup(calculate)
+    await user.click(screen.getByRole('radio', { name: 'Scientific' }))
+
+    await click('Angle unit: degrees')
+    expect(screen.getAllByText('RAD').length).toBeGreaterThan(0)
+
+    await click('0', 'Cosine')
+    await waitFor(() => expect(display()).toHaveTextContent('1'))
+    expect(calculate).toHaveBeenCalledWith(
+      { operation: 'cos', a: '0', angleUnit: 'rad' },
+      expect.any(AbortSignal),
+    )
+  })
+
+  it('disables parentheses in immediate mode', async () => {
+    const { user, key } = setup()
+    await user.click(screen.getByRole('radio', { name: 'Scientific' }))
+
+    expect(key('Open parenthesis')).toHaveAttribute('aria-disabled', 'true')
+    await user.click(key('Open parenthesis'))
+    expect(display()).toHaveTextContent('0')
+
+    await user.click(screen.getByRole('radio', { name: 'Expression' }))
+    expect(key('Open parenthesis')).not.toHaveAttribute('aria-disabled')
+  })
+
+  it('evaluates whole expressions with precedence in expression mode', async () => {
+    const api = createFakeApi({ '7+3*2': '13', '(7+3)*2': '20' })
+    const evaluate = vi.spyOn(api, 'evaluate')
+    const { user, click } = setup(api)
+    await user.click(screen.getByRole('radio', { name: 'Expression' }))
+
+    await click('7', 'Add', '3', 'Multiply', '2')
+    expect(display()).toHaveTextContent('7 + 3 × 2')
+
+    await click('Equals')
+    await waitFor(() => expect(display()).toHaveTextContent(/^13$/))
+    expect(screen.getByTestId('expression')).toHaveTextContent('7 + 3 × 2 =')
+    expect(evaluate).toHaveBeenCalledWith(
+      { expression: '7+3*2', angleUnit: 'deg' },
+      expect.any(AbortSignal),
+    )
+
+    await user.click(screen.getByRole('radio', { name: 'Scientific' }))
+    await user.keyboard('(7+3)*2{Enter}')
+    await waitFor(() => expect(display()).toHaveTextContent(/^20$/))
+  })
+
+  it('shows syntax errors and keeps the expression editable', async () => {
+    const { user, click } = setup(createFakeApi())
+    await user.click(screen.getByRole('radio', { name: 'Expression' }))
+
+    await click('2', 'Add', '2', 'Equals')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Syntax error')
+
+    await click('Backspace')
+    expect(display()).toHaveTextContent('2 +')
+  })
+
+  it('remembers the keypad, evaluation mode and angle unit', async () => {
+    const { user, click } = setup()
+    await user.click(screen.getByRole('radio', { name: 'Scientific' }))
+    await user.click(screen.getByRole('radio', { name: 'Expression' }))
+    await click('Angle unit: degrees')
+
+    cleanup()
+    setup()
+
+    expect(screen.getByRole('radio', { name: 'Scientific' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Expression' })).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Angle unit: radians' })).toBeInTheDocument()
   })
 
   it('shrinks the font for long numbers', async () => {

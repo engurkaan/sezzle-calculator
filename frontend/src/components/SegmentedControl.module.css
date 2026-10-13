@@ -1,0 +1,43 @@
+.control {
+  display: inline-flex;
+  padding: 0.1875rem;
+  border-radius: 999px;
+  background: var(--key-bg);
+}
+
+.option {
+  padding: 0.3125rem 0.75rem;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.option:hover {
+  color: var(--fg);
+}
+
+.option[aria-checked='true'] {
+  color: var(--fg);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+.option:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option {
+    transition: none;
+  }
+}

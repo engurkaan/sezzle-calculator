@@ -1,4 +1,10 @@
-import type { ApiErrorCode, CalculationRequest, CalculationResponse } from './types'
+import type {
+  ApiErrorCode,
+  CalculationRequest,
+  CalculationResponse,
+  EvaluationRequest,
+  EvaluationResponse,
+} from './types'
 
 /** Error raised for every failed calculation, whatever its cause. */
 export class ApiError extends Error {
@@ -28,24 +34,41 @@ export type Calculate = (
   signal?: AbortSignal,
 ) => Promise<CalculationResponse>
 
+export type Evaluate = (
+  request: EvaluationRequest,
+  signal?: AbortSignal,
+) => Promise<EvaluationResponse>
+
+/** Everything the UI needs from the backend; injectable for tests. */
+export interface CalculatorApi {
+  /** Runs one operation, e.g. `POST /api/v1/add`. */
+  calculate: Calculate
+  /** Evaluates a whole expression with operator precedence. */
+  evaluate: Evaluate
+}
+
 export const DEFAULT_TIMEOUT_MS = 5000
 
 /**
- * Creates a calculate function bound to a backend.
+ * Creates an API client bound to a backend.
  *
- * It resolves with the server's response or rejects with an ApiError. If the
- * caller aborts through `signal`, the native AbortError is rethrown so callers
- * can tell cancellation apart from failure.
+ * Calls resolve with the server's response or reject with an ApiError. If
+ * the caller aborts through `signal`, the native AbortError is rethrown so
+ * callers can tell cancellation apart from failure.
  */
 export function createClient({
   baseUrl = '',
   timeoutMs = DEFAULT_TIMEOUT_MS,
   fetch: fetchImpl = (...args) => globalThis.fetch(...args),
-}: ClientOptions = {}): Calculate {
+}: ClientOptions = {}): CalculatorApi {
   const root = baseUrl.replace(/\/+$/, '')
 
-  return async function calculate(request, signal) {
-    const { operation, ...operands } = request
+  async function post<T>(
+    path: string,
+    payload: unknown,
+    isValid: (body: unknown) => body is T,
+    signal: AbortSignal | undefined,
+  ): Promise<T> {
     const controller = new AbortController()
     let timedOut = false
     const timer = setTimeout(() => {
@@ -58,10 +81,10 @@ export function createClient({
     try {
       let response: Response
       try {
-        response = await fetchImpl(`${root}/api/v1/${operation}`, {
+        response = await fetchImpl(`${root}${path}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify(operands),
+          body: JSON.stringify(payload),
           signal: controller.signal,
         })
       } catch (err) {
@@ -79,7 +102,7 @@ export function createClient({
       if (!response.ok) {
         throw toServerError(body, response.status)
       }
-      if (!isCalculationResponse(body)) {
+      if (!isValid(body)) {
         throw new ApiError('INVALID_RESPONSE', 'The server returned an unexpected response.')
       }
       return body
@@ -87,6 +110,15 @@ export function createClient({
       clearTimeout(timer)
       signal?.removeEventListener('abort', forwardAbort)
     }
+  }
+
+  return {
+    calculate({ operation, ...operands }, signal) {
+      return post(`/api/v1/${operation}`, operands, isCalculationResponse, signal)
+    },
+    evaluate(request, signal) {
+      return post('/api/v1/evaluate', request, isEvaluationResponse, signal)
+    },
   }
 }
 
@@ -127,7 +159,11 @@ function isCalculationResponse(value: unknown): value is CalculationResponse {
   )
 }
 
+function isEvaluationResponse(value: unknown): value is EvaluationResponse {
+  return isRecord(value) && typeof value.expression === 'string' && isDecimalString(value.result)
+}
+
 /** Client configured from the build environment. */
-export const calculate: Calculate = createClient({
+export const api: CalculatorApi = createClient({
   baseUrl: import.meta.env.VITE_API_BASE_URL ?? '',
 })

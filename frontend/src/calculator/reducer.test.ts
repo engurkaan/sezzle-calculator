@@ -11,7 +11,8 @@ import {
   selectDisplay,
   selectExpression,
 } from './reducer'
-import type { CalculatorAction, CalculatorState } from './types'
+import type { CalculationRequest } from '../api/types'
+import type { CalculatorAction, CalculatorState, PendingRequest, ScientificFunction } from './types'
 
 const SHORTHAND: Record<string, CalculatorAction> = {
   '.': { type: 'decimal' },
@@ -22,7 +23,7 @@ const SHORTHAND: Record<string, CalculatorAction> = {
   '^': { type: 'operator', operator: 'power' },
   '=': { type: 'equals' },
   '%': { type: 'percent' },
-  r: { type: 'sqrt' },
+  r: { type: 'function', name: 'sqrt' },
   n: { type: 'toggleSign' },
   '<': { type: 'backspace' },
   C: { type: 'clear' },
@@ -39,6 +40,14 @@ function toAction(key: string): CalculatorAction {
   return action
 }
 
+/** The operation request behind a pending call (immediate mode only). */
+function requestOf(pending: PendingRequest | null | undefined): CalculationRequest {
+  if (pending?.call.kind !== 'calculate') {
+    throw new Error('expected a pending calculate call')
+  }
+  return pending.call.request
+}
+
 /** Answers the pending request the way the backend would. */
 function settle(state: CalculatorState): CalculatorState {
   const { pending } = state
@@ -49,7 +58,7 @@ function settle(state: CalculatorState): CalculatorState {
     return calculatorReducer(state, {
       type: 'resolve',
       id: pending.id,
-      result: evaluate(pending.request),
+      result: evaluate(requestOf(pending)),
     })
   } catch (err) {
     return calculatorReducer(state, {
@@ -160,7 +169,7 @@ describe('binary operations', () => {
 
   it('sends the operation to the backend instead of computing locally', () => {
     const state = calculatorReducer(press('12+7'), { type: 'equals' })
-    expect(state.pending?.request).toEqual({ operation: 'add', a: '12', b: '7' })
+    expect(requestOf(state.pending)).toEqual({ operation: 'add', a: '12', b: '7' })
     expect(selectExpression(state)).toBe('12 + 7')
   })
 
@@ -228,7 +237,7 @@ describe('binary operations', () => {
 describe('decimal precision', () => {
   it('sends typed numbers to the backend exactly as typed', () => {
     const state = calculatorReducer(press('0.1+12345678901234567890'), { type: 'equals' })
-    expect(state.pending?.request).toEqual({
+    expect(requestOf(state.pending)).toEqual({
       operation: 'add',
       a: '0.1',
       b: '12345678901234567890',
@@ -237,7 +246,7 @@ describe('decimal precision', () => {
 
   it('drops a trailing decimal point from typed operands', () => {
     const state = calculatorReducer(press('5.*2.'), { type: 'equals' })
-    expect(state.pending?.request).toEqual({ operation: 'multiply', a: '5', b: '2' })
+    expect(requestOf(state.pending)).toEqual({ operation: 'multiply', a: '5', b: '2' })
   })
 
   it('keeps results that float64 would corrupt', () => {
@@ -297,12 +306,99 @@ describe('unary operations', () => {
   })
 })
 
+describe('scientific keys', () => {
+  const fn = (name: ScientificFunction): CalculatorAction => ({ type: 'function', name })
+  const queued = (keys: string, ...actions: CalculatorAction[]) =>
+    requestOf(actions.reduce(calculatorReducer, press(keys)).pending)
+
+  it.each<[ScientificFunction, CalculationRequest, string]>([
+    ['sin', { operation: 'sin', a: '30', angleUnit: 'deg' }, 'sin(30°)'],
+    ['cos', { operation: 'cos', a: '30', angleUnit: 'deg' }, 'cos(30°)'],
+    ['tan', { operation: 'tan', a: '30', angleUnit: 'deg' }, 'tan(30°)'],
+    ['ln', { operation: 'ln', a: '30' }, 'ln(30)'],
+    ['log', { operation: 'log', a: '30' }, 'log(30)'],
+    ['exp', { operation: 'exp', a: '30' }, 'exp(30)'],
+    ['factorial', { operation: 'factorial', a: '30' }, '30!'],
+    ['square', { operation: 'power', a: '30', b: '2' }, '30²'],
+    ['cube', { operation: 'power', a: '30', b: '3' }, '30³'],
+    ['tenPower', { operation: 'power', a: '10', b: '30' }, '10^30'],
+    ['reciprocal', { operation: 'divide', a: '1', b: '30' }, '1/30'],
+    ['sqrt', { operation: 'sqrt', a: '30' }, '√30'],
+  ])('%s queues the right request', (name, request, expression) => {
+    const state = calculatorReducer(press('30'), fn(name))
+    expect(requestOf(state.pending)).toEqual(request)
+    expect(state.pending?.expression).toBe(expression)
+  })
+
+  it('sends radians when selected', () => {
+    expect(queued('1', { type: 'setAngleUnit', unit: 'rad' }, fn('sin'))).toEqual({
+      operation: 'sin',
+      a: '1',
+      angleUnit: 'rad',
+    })
+    const state = calculatorReducer(
+      calculatorReducer(press('1'), { type: 'setAngleUnit', unit: 'rad' }),
+      fn('sin'),
+    )
+    expect(state.pending?.expression).toBe('sin(1 rad)')
+  })
+
+  it('applies a function to the second operand mid-calculation', () => {
+    expect(display('2+9r')).toBe('3')
+    const state = calculatorReducer(press('2+3'), fn('square'))
+    expect(requestOf(state.pending)).toEqual({ operation: 'power', a: '3', b: '2' })
+  })
+
+  it('takes the absolute value locally', () => {
+    const typed = calculatorReducer(press('5n'), fn('abs'))
+    expect(typed.pending).toBeNull()
+    expect(selectDisplay(typed)).toBe('5')
+
+    const computed = calculatorReducer(press('2-9='), fn('abs'))
+    expect(computed.pending).toBeNull()
+    expect(selectDisplay(computed)).toBe('7')
+  })
+
+  it('inserts constants exactly', () => {
+    const state = calculatorReducer(initialState, { type: 'constant', name: 'pi' })
+    expect(selectDisplay(state)).toBe('3.1415926535897932385')
+    const doubled = calculatorReducer(press('*2', state), { type: 'equals' })
+    expect(requestOf(doubled.pending)).toEqual({
+      operation: 'multiply',
+      a: '3.141592653589793238462643383279503',
+      b: '2',
+    })
+  })
+
+  it('supports mod as an operator', () => {
+    const state = calculatorReducer(
+      calculatorReducer(press('10'), { type: 'operator', operator: 'mod' }),
+      { type: 'digit', digit: '3' },
+    )
+    const equals = calculatorReducer(state, { type: 'equals' })
+    expect(requestOf(equals.pending)).toEqual({ operation: 'mod', a: '10', b: '3' })
+    expect(equals.pending?.expression).toBe('10 mod 3')
+  })
+
+  it('ignores parentheses', () => {
+    const state = press('2')
+    expect(calculatorReducer(state, { type: 'paren', side: 'open' })).toBe(state)
+  })
+
+  it('starts fresh with a constant after an error', () => {
+    const failed = press('1/0=')
+    const state = calculatorReducer(failed, { type: 'constant', name: 'e' })
+    expect(state.error).toBeNull()
+    expect(selectDisplay(state)).toBe('2.7182818284590452354')
+  })
+})
+
 describe('errors', () => {
   it('reports division by zero', () => {
     const state = press('5/0=')
     expect(selectDisplay(state)).toBe('Cannot divide by zero')
     expect(state.error).not.toBeNull()
-    expect(state.operator).toBe('divide')
+    expect(state.immediate.operator).toBe('divide')
   })
 
   it('reports square roots of negative numbers', () => {
@@ -317,13 +413,13 @@ describe('errors', () => {
     const state = press('5/0=7')
     expect(state.error).toBeNull()
     expect(selectDisplay(state)).toBe('7')
-    expect(state.operator).toBeNull()
+    expect(state.immediate.operator).toBeNull()
   })
 
   it('dismisses the error on non-entry keys without applying them', () => {
     const state = press('5/0=+')
     expect(state.error).toBeNull()
-    expect(state.operator).toBeNull()
+    expect(state.immediate.operator).toBeNull()
     expect(selectDisplay(state)).toBe('0')
   })
 
@@ -373,8 +469,8 @@ describe('clear', () => {
     const state = press('2+3=4*C')
     expect(selectDisplay(state)).toBe('0')
     expect(selectExpression(state)).toBe('')
-    expect(state.operator).toBeNull()
-    expect(state.lastOperation).toBeNull()
+    expect(state.immediate.operator).toBeNull()
+    expect(state.immediate.lastOperation).toBeNull()
     expect(state.history).toHaveLength(1)
   })
 })
@@ -383,7 +479,7 @@ describe('history', () => {
   it('records every completed calculation, newest first', () => {
     const state = press('2+3=r')
     expect(state.history.map(({ expression, result }) => ({ expression, result }))).toEqual([
-      { expression: '√5', result: String(Math.sqrt(5)) },
+      { expression: '√5', result: '2.2360679775' },
       { expression: '2 + 3', result: '5' },
     ])
   })
@@ -415,10 +511,12 @@ describe('history', () => {
   })
 
   it('restores a previous session with fresh ids', () => {
-    const restored = createInitialState([
-      { id: 7, expression: '1 + 1', result: '2' },
-      { id: 3, expression: '2 + 2', result: '4' },
-    ])
+    const restored = createInitialState({
+      history: [
+        { id: 7, expression: '1 + 1', result: '2' },
+        { id: 3, expression: '2 + 2', result: '4' },
+      ],
+    })
     expect(restored.history).toHaveLength(2)
     expect(restored.nextId).toBe(8)
     expect(createInitialState().nextId).toBe(1)

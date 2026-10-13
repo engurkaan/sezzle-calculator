@@ -1,8 +1,8 @@
 import { useEffect, useReducer } from 'react'
-import { isDecimalString, type Calculate } from '../api/client'
+import { isDecimalString, type CalculatorApi } from '../api/client'
+import type { AngleUnit } from '../api/types'
 import { load, save } from '../persistence/storage'
 import { toDisplayMessage } from './errors'
-import type { HistoryEntry } from './types'
 import {
   calculatorReducer,
   createInitialState,
@@ -10,8 +10,15 @@ import {
   selectDisplay,
   selectExpression,
 } from './reducer'
+import type { ApiCall, Evaluation, HistoryEntry } from './types'
 
 const HISTORY_KEY = 'history:v1'
+const SETTINGS_KEY = 'settings:v1'
+
+interface Settings {
+  evaluation: Evaluation
+  angleUnit: AngleUnit
+}
 
 function isHistory(value: unknown): value is HistoryEntry[] {
   return (
@@ -27,28 +34,51 @@ function isHistory(value: unknown): value is HistoryEntry[] {
   )
 }
 
+function isSettings(value: unknown): value is Settings {
+  const v = value as Partial<Settings> | null
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    (v.evaluation === 'immediate' || v.evaluation === 'expression') &&
+    (v.angleUnit === 'deg' || v.angleUnit === 'rad')
+  )
+}
+
+function send(api: CalculatorApi, call: ApiCall, signal: AbortSignal) {
+  return call.kind === 'calculate'
+    ? api.calculate(call.request, signal)
+    : api.evaluate(call.request, signal)
+}
+
 /**
  * Connects the calculator state machine to the backend: whenever the reducer
- * queues a request, it is sent with `calculate` and the outcome is dispatched
- * back. Superseded requests (e.g. after AC) are aborted. History is kept in
- * localStorage so it survives reloads until the user deletes it.
+ * queues a request, it is sent through `api` and the outcome is dispatched
+ * back. Superseded requests (e.g. after AC) are aborted. History and settings
+ * are kept in localStorage so they survive reloads until the user deletes them.
  */
-export function useCalculator(calculate: Calculate) {
+export function useCalculator(api: CalculatorApi) {
   const [state, dispatch] = useReducer(calculatorReducer, undefined, () =>
-    createInitialState(load(HISTORY_KEY, isHistory)),
+    createInitialState({
+      history: load(HISTORY_KEY, isHistory),
+      ...load(SETTINGS_KEY, isSettings),
+    }),
   )
-  const { pending, history } = state
+  const { pending, history, evaluation, angleUnit } = state
 
   useEffect(() => {
     save(HISTORY_KEY, history)
   }, [history])
 
   useEffect(() => {
+    save(SETTINGS_KEY, { evaluation, angleUnit } satisfies Settings)
+  }, [evaluation, angleUnit])
+
+  useEffect(() => {
     if (!pending) {
       return
     }
     const controller = new AbortController()
-    calculate(pending.request, controller.signal).then(
+    send(api, pending.call, controller.signal).then(
       (response) => dispatch({ type: 'resolve', id: pending.id, result: response.result }),
       (err: unknown) => {
         if (!controller.signal.aborted) {
@@ -57,7 +87,7 @@ export function useCalculator(calculate: Calculate) {
       },
     )
     return () => controller.abort()
-  }, [pending, calculate])
+  }, [pending, api])
 
   return {
     state,

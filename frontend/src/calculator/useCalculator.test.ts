@@ -1,9 +1,13 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { ApiError, type Calculate } from '../api/client'
+import { ApiError, type Calculate, type CalculatorApi } from '../api/client'
 import type { CalculationResponse } from '../api/types'
-import { fakeCalculate } from '../test/fakeBackend'
+import { createFakeApi, fakeCalculate } from '../test/fakeBackend'
 import { useCalculator } from './useCalculator'
+
+function apiWith(calculate: Calculate): CalculatorApi {
+  return { ...createFakeApi(), calculate }
+}
 
 function deferred() {
   let resolve!: (value: CalculationResponse) => void
@@ -18,7 +22,7 @@ function deferred() {
 describe('useCalculator', () => {
   it('sends queued operations to the backend and shows the result', async () => {
     const calculate = vi.fn<Calculate>(fakeCalculate)
-    const { result } = renderHook(() => useCalculator(calculate))
+    const { result } = renderHook(() => useCalculator(apiWith(calculate)))
 
     act(() => {
       result.current.dispatch({ type: 'digit', digit: '6' })
@@ -41,7 +45,7 @@ describe('useCalculator', () => {
     const calculate = vi
       .fn<Calculate>()
       .mockRejectedValue(new ApiError('DIVISION_BY_ZERO', 'division by zero is undefined', 422))
-    const { result } = renderHook(() => useCalculator(calculate))
+    const { result } = renderHook(() => useCalculator(apiWith(calculate)))
 
     act(() => {
       result.current.dispatch({ type: 'digit', digit: '1' })
@@ -61,11 +65,11 @@ describe('useCalculator', () => {
       signal = s
       return request.promise
     })
-    const { result } = renderHook(() => useCalculator(calculate))
+    const { result } = renderHook(() => useCalculator(apiWith(calculate)))
 
     act(() => {
       result.current.dispatch({ type: 'digit', digit: '9' })
-      result.current.dispatch({ type: 'sqrt' })
+      result.current.dispatch({ type: 'function', name: 'sqrt' })
     })
     expect(result.current.busy).toBe(true)
 
@@ -81,7 +85,7 @@ describe('useCalculator', () => {
   })
 
   it('highlights the operator awaiting its second operand', () => {
-    const { result } = renderHook(() => useCalculator(fakeCalculate))
+    const { result } = renderHook(() => useCalculator(createFakeApi()))
 
     act(() => {
       result.current.dispatch({ type: 'digit', digit: '3' })

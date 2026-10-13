@@ -15,12 +15,40 @@
   box-shadow: var(--shadow);
 }
 
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.pads {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
 @media (min-width: 48rem) {
   .layout {
-    grid-template-columns: 22.5rem auto;
+    grid-template-columns: auto auto;
     max-width: none;
     width: auto;
     align-items: stretch;
+  }
+
+  .calculator {
+    width: 22.5rem;
+  }
+
+  /* The scientific keys sit to the left of the keypad, with key sizes
+     matching the basic keypad. */
+  .calculator[data-keypad='scientific'] {
+    width: 37.5rem;
+  }
+
+  .calculator[data-keypad='scientific'] .pads {
+    display: grid;
+    grid-template-columns: 3fr 4fr;
   }
 
   /* Keep the history panel exactly as tall as the calculator. */

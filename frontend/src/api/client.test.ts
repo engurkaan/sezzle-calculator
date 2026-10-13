@@ -31,7 +31,7 @@ describe('createClient', () => {
     const fetch = vi
       .fn()
       .mockResolvedValue(jsonResponse(200, { operation: 'add', operands: ['2', '3'], result: '5' }))
-    const calculate = createClient({ baseUrl: 'http://api.test/', fetch })
+    const { calculate } = createClient({ baseUrl: 'http://api.test/', fetch })
 
     const res = await calculate({ operation: 'add', a: '2', b: '3' })
 
@@ -48,7 +48,7 @@ describe('createClient', () => {
     const fetch = vi
       .fn()
       .mockResolvedValue(jsonResponse(200, { operation: 'sqrt', operands: ['9'], result: '3' }))
-    const calculate = createClient({ fetch })
+    const { calculate } = createClient({ fetch })
 
     await calculate({ operation: 'sqrt', a: '9' })
 
@@ -57,13 +57,49 @@ describe('createClient', () => {
     expect(JSON.parse(init.body as string)).toEqual({ a: '9' })
   })
 
+  it('sends the angle unit for trigonometric operations', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { operation: 'sin', operands: ['30'], result: '0.5' }))
+    const { calculate } = createClient({ fetch })
+
+    await calculate({ operation: 'sin', a: '30', angleUnit: 'deg' })
+
+    const [url, init] = fetch.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/v1/sin')
+    expect(JSON.parse(init.body as string)).toEqual({ a: '30', angleUnit: 'deg' })
+  })
+
+  it('evaluates whole expressions', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { expression: '7+3*2', result: '13' }))
+    const { evaluate } = createClient({ fetch })
+
+    const res = await evaluate({ expression: '7+3*2', angleUnit: 'rad' })
+
+    expect(res).toEqual({ expression: '7+3*2', result: '13' })
+    const [url, init] = fetch.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/v1/evaluate')
+    expect(JSON.parse(init.body as string)).toEqual({ expression: '7+3*2', angleUnit: 'rad' })
+  })
+
+  it('validates evaluation responses', async () => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse(200, { result: 13 }))
+    const { evaluate } = createClient({ fetch })
+
+    const err = await captureError(evaluate({ expression: '7+3*2', angleUnit: 'rad' }))
+
+    expect(err.code).toBe('INVALID_RESPONSE')
+  })
+
   it('surfaces the server error code, message and status', async () => {
     const fetch = vi.fn().mockResolvedValue(
       jsonResponse(422, {
         error: { code: 'DIVISION_BY_ZERO', message: 'division by zero is undefined' },
       }),
     )
-    const calculate = createClient({ fetch })
+    const { calculate } = createClient({ fetch })
 
     const err = await captureError(calculate({ operation: 'divide', a: '1', b: '0' }))
 
@@ -74,7 +110,7 @@ describe('createClient', () => {
 
   it('falls back to HTTP_ERROR when the error body is not the standard envelope', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response('Bad Gateway', { status: 502 }))
-    const calculate = createClient({ fetch })
+    const { calculate } = createClient({ fetch })
 
     const err = await captureError(calculate({ operation: 'add', a: '1', b: '1' }))
 
@@ -93,7 +129,7 @@ describe('createClient', () => {
     ],
     ['numeric operands', jsonResponse(200, { operation: 'add', operands: [1, 1], result: '2' })],
   ])('rejects a successful response with %s', async (_, response) => {
-    const calculate = createClient({ fetch: vi.fn().mockResolvedValue(response) })
+    const { calculate } = createClient({ fetch: vi.fn().mockResolvedValue(response) })
 
     const err = await captureError(calculate({ operation: 'add', a: '1', b: '1' }))
 
@@ -102,7 +138,7 @@ describe('createClient', () => {
 
   it('reports network failures', async () => {
     const fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
-    const calculate = createClient({ fetch })
+    const { calculate } = createClient({ fetch })
 
     const err = await captureError(calculate({ operation: 'add', a: '1', b: '1' }))
 
@@ -120,7 +156,7 @@ describe('createClient', () => {
 
     it('aborts and reports TIMEOUT when the server is too slow', async () => {
       const fetch = vi.fn(rejectOnAbort)
-      const calculate = createClient({ fetch, timeoutMs: 1000 })
+      const { calculate } = createClient({ fetch, timeoutMs: 1000 })
 
       const pending = captureError(calculate({ operation: 'add', a: '1', b: '1' }))
       await vi.advanceTimersByTimeAsync(1000)
@@ -137,7 +173,7 @@ describe('createClient', () => {
         .mockResolvedValue(
           jsonResponse(200, { operation: 'add', operands: ['1', '1'], result: '2' }),
         )
-      const calculate = createClient({ fetch, timeoutMs: 1000 })
+      const { calculate } = createClient({ fetch, timeoutMs: 1000 })
 
       await calculate({ operation: 'add', a: '1', b: '1' })
 
@@ -146,7 +182,7 @@ describe('createClient', () => {
   })
 
   it('rethrows the AbortError when the caller cancels', async () => {
-    const calculate = createClient({ fetch: vi.fn(rejectOnAbort) })
+    const { calculate } = createClient({ fetch: vi.fn(rejectOnAbort) })
     const controller = new AbortController()
 
     const pending = calculate({ operation: 'add', a: '1', b: '1' }, controller.signal)

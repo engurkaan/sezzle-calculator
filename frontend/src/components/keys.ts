@@ -1,6 +1,6 @@
-import type { CalculatorAction, InfixOperator } from '../calculator/types'
+import type { CalculatorAction, InfixOperator, ScientificFunction } from '../calculator/types'
 
-export type KeyVariant = 'digit' | 'function' | 'operator' | 'equals'
+export type KeyVariant = 'digit' | 'function' | 'operator' | 'equals' | 'scientific'
 
 export interface KeyDefinition {
   id: string
@@ -10,7 +10,7 @@ export interface KeyDefinition {
   action: CalculatorAction
   variant: KeyVariant
   /** Keyboard shortcut, shown as a tooltip. */
-  shortcut?: string
+  shortcut?: string | undefined
   /** Grid placement for keys wider or taller than one cell. */
   span?: 'wide' | 'tall'
 }
@@ -26,7 +26,7 @@ const operator = (
   op: InfixOperator,
   label: string,
   ariaLabel: string,
-  shortcut: string,
+  shortcut?: string,
 ): KeyDefinition => ({
   id: op,
   label,
@@ -68,7 +68,7 @@ export const KEYS: KeyDefinition[] = [
     id: 'sqrt',
     label: '√',
     ariaLabel: 'Square root',
-    action: { type: 'sqrt' },
+    action: { type: 'function', name: 'sqrt' },
     variant: 'function',
     shortcut: 'r',
   },
@@ -116,3 +116,76 @@ export const KEYS: KeyDefinition[] = [
     shortcut: '.',
   },
 ]
+
+const fn = (
+  name: ScientificFunction,
+  label: string,
+  ariaLabel: string,
+  shortcut?: string,
+): KeyDefinition => ({
+  id: name,
+  label,
+  ariaLabel,
+  action: { type: 'function', name },
+  variant: 'scientific',
+  shortcut,
+})
+
+/**
+ * Extra keys shown in scientific mode, in row-major order for a three-column
+ * grid (six columns on narrow screens). The angle-unit key is rendered
+ * separately because its label depends on state.
+ */
+export const SCIENTIFIC_KEYS: KeyDefinition[] = [
+  {
+    id: 'open',
+    label: '(',
+    ariaLabel: 'Open parenthesis',
+    action: { type: 'paren', side: 'open' },
+    variant: 'scientific',
+    shortcut: '(',
+  },
+  {
+    id: 'close',
+    label: ')',
+    ariaLabel: 'Close parenthesis',
+    action: { type: 'paren', side: 'close' },
+    variant: 'scientific',
+    shortcut: ')',
+  },
+  operator('mod', 'mod', 'Modulo'),
+
+  fn('sin', 'sin', 'Sine'),
+  fn('cos', 'cos', 'Cosine'),
+  fn('tan', 'tan', 'Tangent'),
+
+  fn('ln', 'ln', 'Natural logarithm'),
+  fn('log', 'log', 'Logarithm base 10'),
+  fn('exp', 'eˣ', 'e to the power of x'),
+
+  fn('square', 'x²', 'Square'),
+  fn('cube', 'x³', 'Cube'),
+  fn('tenPower', '10ˣ', '10 to the power of x'),
+
+  fn('reciprocal', '1/x', 'Reciprocal'),
+  fn('abs', '|x|', 'Absolute value'),
+  fn('factorial', 'n!', 'Factorial', '!'),
+
+  {
+    id: 'pi',
+    label: 'π',
+    ariaLabel: 'Pi',
+    action: { type: 'constant', name: 'pi' },
+    variant: 'scientific',
+  },
+  {
+    id: 'e',
+    label: 'e',
+    ariaLabel: "Euler's number",
+    action: { type: 'constant', name: 'e' },
+    variant: 'scientific',
+  },
+]
+
+/** Keys that only make sense when building a whole expression. */
+export const EXPRESSION_ONLY_KEYS = new Set(['open', 'close'])
