@@ -24,7 +24,7 @@ info:
     | 405 | Wrong HTTP method (the `Allow` header lists the valid ones) |
     | 413 | The body is larger than 1 KB |
     | 415 | `Content-Type` is not `application/json` |
-    | 422 | The request is valid but has no answer (division by zero, square root of a negative number, a non-real power, or a result outside the supported range) |
+    | 422 | The request is valid but has no answer (division by zero, square root of a negative number, a non-real power, a value outside a function's domain such as ln 0 or tan 90°, or a result outside the supported range) |
 servers:
   - url: http://localhost:8080
 # The calculator is a public, stateless service: no authentication.
@@ -32,33 +32,52 @@ security: []
 paths:
   /api/v1/{operation}:
     post:
-      summary: Perform a two-operand operation
-      operationId: calculateBinary
+      summary: Perform a single operation
+      operationId: calculate
       parameters:
         - name: operation
           in: path
           required: true
           schema:
             type: string
-            enum: [add, subtract, multiply, divide, power, percentage]
+            enum:
+              [add, subtract, multiply, divide, power, percentage, mod, sqrt, ln, log, exp, factorial, sin, cos, tan]
           description: |
+            Two operands (`a`, `b`):
             - `add`: a + b
             - `subtract`: a − b
             - `multiply`: a × b
             - `divide`: a ÷ b
             - `power`: a raised to the power b
             - `percentage`: a percent of b, i.e. a × b ÷ 100
+            - `mod`: remainder of a ÷ b, with the sign of a
+
+            One operand (`a`):
+            - `sqrt`: √a
+            - `ln`, `log`: natural and base-10 logarithm
+            - `exp`: e raised to a
+            - `factorial`: a! for integers 0–2000
+            - `sin`, `cos`, `tan`: trigonometric functions; also accept
+              `angleUnit` (`rad`, the default, or `deg`). Degree arguments are
+              reduced exactly, so sin 180° is exactly 0.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BinaryOperands'
+              anyOf:
+                - $ref: '#/components/schemas/BinaryOperands'
+                - $ref: '#/components/schemas/UnaryOperand'
+                - $ref: '#/components/schemas/TrigOperand'
             examples:
               strings:
                 value: { a: '0.1', b: '0.2' }
               numbers:
                 value: { a: 5, b: 3 }
+              unary:
+                value: { a: '144' }
+              degrees:
+                value: { a: '30', angleUnit: deg }
       responses:
         '200':
           $ref: '#/components/responses/Result'
@@ -72,22 +91,68 @@ paths:
           $ref: '#/components/responses/Error'
         '422':
           $ref: '#/components/responses/Error'
-  /api/v1/sqrt:
+  /api/v1/evaluate:
     post:
-      summary: Square root
-      operationId: sqrt
+      summary: Evaluate a whole expression
+      operationId: evaluate
+      description: |
+        Evaluates an expression with standard operator precedence, so
+        `7+3*2` is 13. Grammar, lowest to highest precedence:
+
+        - `+` `-` (left-associative)
+        - `*` `/` `mod` (left-associative)
+        - unary `-` and `+`
+        - `^` (right-associative: `2^3^2` = 512, `-2^2` = −4)
+        - postfix `!` and `%`
+        - numbers, `pi`, `e`, parentheses, and the functions `sqrt`, `sin`,
+          `cos`, `tan`, `ln`, `log`, `exp` and `abs`, written `name(…)`
+
+        `a + b%` and `a - b%` add or subtract b percent of a
+        (`200+10%` = 220); elsewhere `b%` is b ÷ 100. Implicit multiplication
+        (`2pi`) is not accepted. Expressions are limited to 1000 characters
+        and 64 levels of nesting.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UnaryOperand'
-            example: { a: '144' }
+              type: object
+              additionalProperties: false
+              required: [expression]
+              properties:
+                expression: { type: string, maxLength: 1000, example: '7+3*2' }
+                angleUnit: { $ref: '#/components/schemas/AngleUnit' }
+            examples:
+              precedence:
+                value: { expression: '7+3*2' }
+              scientific:
+                value: { expression: '2*sin(30)+sqrt(16)', angleUnit: deg }
       responses:
         '200':
-          $ref: '#/components/responses/Result'
+          description: The result.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [expression, result]
+                properties:
+                  expression: { type: string, example: '7+3*2' }
+                  result:
+                    allOf: [{ $ref: '#/components/schemas/DecimalString' }]
+                    example: '13'
         '400':
-          $ref: '#/components/responses/Error'
+          description: |
+            Malformed request or `INVALID_EXPRESSION`. Syntax errors include
+            the 1-based `position` of the problem.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: INVALID_EXPRESSION
+                  message: 'unexpected "*" at position 3'
+                  position: 3
         '413':
           $ref: '#/components/responses/Error'
         '415':
@@ -155,6 +220,17 @@ components:
       required: [a]
       properties:
         a: { $ref: '#/components/schemas/Operand' }
+    TrigOperand:
+      type: object
+      additionalProperties: false
+      required: [a]
+      properties:
+        a: { $ref: '#/components/schemas/Operand' }
+        angleUnit: { $ref: '#/components/schemas/AngleUnit' }
+    AngleUnit:
+      type: string
+      enum: [rad, deg]
+      default: rad
     CalculationResult:
       type: object
       required: [operation, operands, result]
@@ -188,6 +264,8 @@ components:
                 - INVALID_OPERAND
                 - MISSING_OPERAND
                 - UNEXPECTED_FIELD
+                - INVALID_ANGLE_UNIT
+                - INVALID_EXPRESSION
                 - UNSUPPORTED_MEDIA_TYPE
                 - PAYLOAD_TOO_LARGE
                 - UNKNOWN_OPERATION
@@ -196,11 +274,15 @@ components:
                 - DIVISION_BY_ZERO
                 - NEGATIVE_SQUARE_ROOT
                 - NON_REAL_RESULT
+                - DOMAIN_ERROR
                 - RESULT_OUT_OF_RANGE
                 - INTERNAL_ERROR
             message:
               type: string
               description: Human-readable explanation; may change, do not parse.
+            position:
+              type: integer
+              description: For INVALID_EXPRESSION, the 1-based character position of the problem.
       example:
         error:
           code: DIVISION_BY_ZERO
