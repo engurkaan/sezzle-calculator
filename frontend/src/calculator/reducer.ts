@@ -2,6 +2,7 @@ import type { AngleUnit } from '../api/types'
 import {
   applyExpressionResult,
   expressionReducer,
+  formatTokens,
   selectExpressionDisplay,
   selectExpressionLine,
 } from './expression'
@@ -138,8 +139,12 @@ export function selectExpression(state: CalculatorState): string {
   if (state.pending) {
     return state.pending.expression
   }
-  return state.evaluation === 'immediate'
-    ? selectImmediateExpression(state.immediate)
+  if (state.evaluation === 'immediate') {
+    return selectImmediateExpression(state.immediate)
+  }
+  // After an error the expression is kept for editing; show what failed.
+  return state.error
+    ? formatTokens(state.expression.tokens)
     : selectExpressionLine(state.expression)
 }
 

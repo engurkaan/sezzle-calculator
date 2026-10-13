@@ -291,6 +291,7 @@ describe('errors', () => {
       message: 'Cannot divide by zero',
     })
     expect(selectDisplay(failed)).toBe('Cannot divide by zero')
+    expect(selectExpression(failed)).toBe('1 ÷ (2 − 2)')
 
     const edited = calculatorReducer(failed, action('<'))
     expect(edited.error).toBeNull()
