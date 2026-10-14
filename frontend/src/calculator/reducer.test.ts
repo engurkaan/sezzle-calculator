@@ -40,7 +40,6 @@ function toAction(key: string): CalculatorAction {
   return action
 }
 
-/** The operation request behind a pending call (immediate mode only). */
 function requestOf(pending: PendingRequest | null | undefined): CalculationRequest {
   if (pending?.call.kind !== 'calculate') {
     throw new Error('expected a pending calculate call')
@@ -48,7 +47,6 @@ function requestOf(pending: PendingRequest | null | undefined): CalculationReque
   return pending.call.request
 }
 
-/** Answers the pending request the way the backend would. */
 function settle(state: CalculatorState): CalculatorState {
   const { pending } = state
   if (!pending) {
@@ -69,7 +67,6 @@ function settle(state: CalculatorState): CalculatorState {
   }
 }
 
-/** Presses each key in turn, letting the fake backend answer every request. */
 function press(keys: string, state: CalculatorState = initialState): CalculatorState {
   return [...keys].reduce((s, key) => settle(calculatorReducer(s, toAction(key))), state)
 }
@@ -255,7 +252,6 @@ describe('decimal precision', () => {
   })
 
   it('keeps full precision between chained operations', () => {
-    // 1 ÷ 3 is held to 34 digits, so × 3 lands on 0.999… and displays as 1.
     const state = press('1/3*3=')
     expect(selectDisplay(state)).toBe('1')
     expect(state.history[1]?.result).toMatch(/^0\.3{30,}/)

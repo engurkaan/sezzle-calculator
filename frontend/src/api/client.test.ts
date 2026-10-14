@@ -121,7 +121,6 @@ describe('createClient', () => {
   it.each([
     ['a non-JSON body', new Response('ok', { status: 200 })],
     ['a missing result', jsonResponse(200, { operation: 'add', operands: ['1', '1'] })],
-    // Numbers must arrive as decimal strings; a JSON number may already have lost precision.
     ['a numeric result', jsonResponse(200, { operation: 'add', operands: ['1', '1'], result: 2 })],
     [
       'a non-decimal result',

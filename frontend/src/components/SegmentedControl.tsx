@@ -13,7 +13,6 @@ interface SegmentedControlProps<T extends string> {
   onChange: (value: T) => void
 }
 
-/** A compact radio group rendered as a pill switch. */
 export function SegmentedControl<T extends string>({
   label,
   options,

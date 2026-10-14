@@ -6,10 +6,8 @@ import type {
   EvaluationResponse,
 } from './types'
 
-/** Error raised for every failed calculation, whatever its cause. */
 export class ApiError extends Error {
   readonly code: ApiErrorCode | (string & {})
-  /** HTTP status, when the server responded. */
   readonly status: number | undefined
 
   constructor(code: ApiError['code'], message: string, status?: number) {
@@ -21,11 +19,8 @@ export class ApiError extends Error {
 }
 
 export interface ClientOptions {
-  /** Prefix for API URLs. Empty means same origin. */
   baseUrl?: string
-  /** Abort requests that take longer than this. */
   timeoutMs?: number
-  /** Injected for tests; defaults to the global fetch. */
   fetch?: typeof fetch
 }
 
@@ -39,23 +34,13 @@ export type Evaluate = (
   signal?: AbortSignal,
 ) => Promise<EvaluationResponse>
 
-/** Everything the UI needs from the backend; injectable for tests. */
 export interface CalculatorApi {
-  /** Runs one operation, e.g. `POST /api/v1/add`. */
   calculate: Calculate
-  /** Evaluates a whole expression with operator precedence. */
   evaluate: Evaluate
 }
 
 export const DEFAULT_TIMEOUT_MS = 5000
 
-/**
- * Creates an API client bound to a backend.
- *
- * Calls resolve with the server's response or reject with an ApiError. If
- * the caller aborts through `signal`, the native AbortError is rethrown so
- * callers can tell cancellation apart from failure.
- */
 export function createClient({
   baseUrl = '',
   timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -144,7 +129,6 @@ function isErrorEnvelope(value: unknown): value is { error: { code: string; mess
 
 const DECIMAL_PATTERN = /^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/
 
-/** Whether value is a finite decimal number in text form. */
 export function isDecimalString(value: unknown): value is string {
   return typeof value === 'string' && DECIMAL_PATTERN.test(value)
 }
@@ -163,7 +147,6 @@ function isEvaluationResponse(value: unknown): value is EvaluationResponse {
   return isRecord(value) && typeof value.expression === 'string' && isDecimalString(value.result)
 }
 
-/** Client configured from the build environment. */
 export const api: CalculatorApi = createClient({
   baseUrl: import.meta.env.VITE_API_BASE_URL ?? '',
 })

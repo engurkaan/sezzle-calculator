@@ -17,7 +17,6 @@ func TestScientificOperations(t *testing.T) {
 		want    string
 		wantErr error
 	}{
-		// Trigonometry in degrees: exact at special angles.
 		{name: "sin 30°", op: "sin", unit: Degrees, args: []string{"30"}, want: "0.5"},
 		{name: "sin 90°", op: "sin", unit: Degrees, args: []string{"90"}, want: "1"},
 		{name: "sin 180° is exactly zero", op: "sin", unit: Degrees, args: []string{"180"}, want: "0"},
@@ -32,7 +31,6 @@ func TestScientificOperations(t *testing.T) {
 		{name: "tan −270° is undefined", op: "tan", unit: Degrees, args: []string{"-270"}, wantErr: ErrTangentUndefined},
 		{name: "huge degree argument reduces exactly", op: "sin", unit: Degrees, args: []string{"1e39"}, want: "-0.984807753012208059366743024589523"},
 
-		// Trigonometry in radians (reference values to 34 digits).
 		{name: "sin 1", op: "sin", unit: Radians, args: []string{"1"}, want: "0.841470984807896506652502321630299"},
 		{name: "cos 1", op: "cos", unit: Radians, args: []string{"1"}, want: "0.5403023058681397174009366074429766"},
 		{name: "tan 1", op: "tan", unit: Radians, args: []string{"1"}, want: "1.55740772465490223050697480745836"},
@@ -42,7 +40,6 @@ func TestScientificOperations(t *testing.T) {
 		{name: "small angle", op: "sin", unit: Radians, args: []string{"1e-30"}, want: "1e-30"},
 		{name: "argument too large", op: "sin", unit: Radians, args: []string{"1e41"}, wantErr: ErrArgumentTooLarge},
 
-		// Logarithms and exponentials.
 		{name: "ln 10", op: "ln", args: []string{"10"}, want: "2.302585092994045684017991454684364"},
 		{name: "log 1000", op: "log", args: []string{"1000"}, want: "3"},
 		{name: "log 2", op: "log", args: []string{"2"}, want: "0.301029995663981195213738894724493"},
@@ -53,7 +50,6 @@ func TestScientificOperations(t *testing.T) {
 		{name: "exp overflow", op: "exp", args: []string{"100000"}, wantErr: ErrOutOfRange},
 		{name: "exp underflow", op: "exp", args: []string{"-100000"}, wantErr: ErrOutOfRange},
 
-		// Factorial.
 		{name: "0!", op: "factorial", args: []string{"0"}, want: "1"},
 		{name: "20!", op: "factorial", args: []string{"20"}, want: "2432902008176640000"},
 		{name: "170! rounds to 34 digits", op: "factorial", args: []string{"170"}, want: "7.257415615307998967396728211129257e+306"},
@@ -62,7 +58,6 @@ func TestScientificOperations(t *testing.T) {
 		{name: "factorial of fraction", op: "factorial", args: []string{"3.5"}, wantErr: ErrFactorialDomain},
 		{name: "factorial of negative", op: "factorial", args: []string{"-1"}, wantErr: ErrFactorialDomain},
 
-		// Modulo.
 		{name: "mod", op: "mod", args: []string{"10", "3"}, want: "1"},
 		{name: "mod keeps the dividend's sign", op: "mod", args: []string{"-10", "3"}, want: "-1"},
 		{name: "decimal mod", op: "mod", args: []string{"5.5", "2"}, want: "1.5"},
@@ -119,8 +114,6 @@ func TestUsesAngleUnit(t *testing.T) {
 	}
 }
 
-// TestWorstCasesAreCheap guards against inputs that would make one request
-// expensive: every case must finish well within a request timeout.
 func TestWorstCasesAreCheap(t *testing.T) {
 	cases := []struct {
 		op   string

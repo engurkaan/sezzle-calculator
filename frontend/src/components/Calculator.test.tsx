@@ -148,7 +148,6 @@ describe('Calculator', () => {
     await user.keyboard('{Enter}')
 
     await waitFor(() => expect(display()).toHaveTextContent('5'))
-    // The focused "3" key must not have been clicked as well.
     expect(calculate).toHaveBeenCalledOnce()
     expect(calculate).toHaveBeenCalledWith({ operation: 'add', a: '2', b: '3' }, expect.anything())
   })

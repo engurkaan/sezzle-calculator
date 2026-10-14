@@ -278,7 +278,6 @@ func TestOperations(t *testing.T) {
 	}
 }
 
-// TestConcurrentUse guards the shared context: run with -race.
 func TestConcurrentUse(t *testing.T) {
 	t.Parallel()
 	base, exponent := mustParse(t, "1.5"), mustParse(t, "2.5")

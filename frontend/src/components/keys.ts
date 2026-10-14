@@ -5,13 +5,10 @@ export type KeyVariant = 'digit' | 'function' | 'operator' | 'equals' | 'scienti
 export interface KeyDefinition {
   id: string
   label: string
-  /** Accessible name, when the visible label is a symbol. */
   ariaLabel?: string
   action: CalculatorAction
   variant: KeyVariant
-  /** Keyboard shortcut, shown as a tooltip. */
   shortcut?: string | undefined
-  /** Grid placement for keys wider or taller than one cell. */
   span?: 'wide' | 'tall'
 }
 
@@ -36,7 +33,6 @@ const operator = (
   shortcut,
 })
 
-/** Keypad layout, in row-major order for a four-column grid. */
 export const KEYS: KeyDefinition[] = [
   {
     id: 'clear',
@@ -131,11 +127,6 @@ const fn = (
   shortcut,
 })
 
-/**
- * Extra keys shown in scientific mode, in row-major order for a three-column
- * grid (six columns on narrow screens). The angle-unit key is rendered
- * separately because its label depends on state.
- */
 export const SCIENTIFIC_KEYS: KeyDefinition[] = [
   {
     id: 'open',
@@ -187,5 +178,4 @@ export const SCIENTIFIC_KEYS: KeyDefinition[] = [
   },
 ]
 
-/** Keys that only make sense when building a whole expression. */
 export const EXPRESSION_ONLY_KEYS = new Set(['open', 'close'])

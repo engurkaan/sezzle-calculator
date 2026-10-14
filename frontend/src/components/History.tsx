@@ -12,7 +12,6 @@ interface HistoryProps {
   onClear: () => void
 }
 
-/** How long "Clear all" waits for a confirming second click. */
 export const CONFIRM_TIMEOUT_MS = 3000
 
 export function History({

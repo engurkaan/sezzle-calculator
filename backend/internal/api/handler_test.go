@@ -10,7 +10,6 @@ import (
 	"testing"
 )
 
-// do sends a request through the API handler and returns the recorder.
 func do(t *testing.T, method, path, contentType, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -109,7 +108,6 @@ func TestCalculateErrors(t *testing.T) {
 		wantStatus  int
 		wantCode    string
 	}{
-		// Domain errors: well-formed but not computable.
 		{name: "division by zero", path: "/api/v1/divide", body: `{"a":1,"b":0}`, wantStatus: 422, wantCode: CodeDivisionByZero},
 		{name: "negative sqrt", path: "/api/v1/sqrt", body: `{"a":-9}`, wantStatus: 422, wantCode: CodeNegativeSquareRoot},
 		{name: "overflowing result", path: "/api/v1/multiply", body: `{"a":1e6000,"b":1e6000}`, wantStatus: 422, wantCode: CodeResultOutOfRange},
@@ -122,7 +120,6 @@ func TestCalculateErrors(t *testing.T) {
 		{name: "invalid angle unit", path: "/api/v1/sin", body: `{"a":1,"angleUnit":"grad"}`, wantStatus: 400, wantCode: CodeInvalidAngleUnit},
 		{name: "angle unit on non-trig operation", path: "/api/v1/add", body: `{"a":1,"b":2,"angleUnit":"deg"}`, wantStatus: 400, wantCode: CodeUnexpectedField},
 
-		// Routing.
 		{name: "unknown operation", path: "/api/v1/modulo", body: `{"a":1,"b":2}`, wantStatus: 404, wantCode: CodeUnknownOperation},
 		{name: "unknown api route", path: "/api/v2/add", body: `{"a":1,"b":2}`, wantStatus: 404, wantCode: CodeNotFound},
 		{name: "nested api route", path: "/api/v1/add/extra", body: `{"a":1,"b":2}`, wantStatus: 404, wantCode: CodeNotFound},
@@ -130,12 +127,10 @@ func TestCalculateErrors(t *testing.T) {
 		{name: "DELETE on operations list", method: http.MethodDelete, path: "/api/v1/operations", wantStatus: 405, wantCode: CodeMethodNotAllowed},
 		{name: "GET on evaluate", method: http.MethodGet, path: "/api/v1/evaluate", wantStatus: 405, wantCode: CodeMethodNotAllowed},
 
-		// Content negotiation and size.
 		{name: "missing content type", path: "/api/v1/add", contentType: "-", body: `{"a":1,"b":2}`, wantStatus: 415, wantCode: CodeUnsupportedMediaType},
 		{name: "form content type", path: "/api/v1/add", contentType: "application/x-www-form-urlencoded", body: `a=1&b=2`, wantStatus: 415, wantCode: CodeUnsupportedMediaType},
 		{name: "oversized body", path: "/api/v1/add", body: `{"a":1,"b":2` + strings.Repeat(" ", maxBodyBytes) + `}`, wantStatus: 413, wantCode: CodePayloadTooLarge},
 
-		// Malformed payloads.
 		{name: "empty body", path: "/api/v1/add", body: ``, wantStatus: 400, wantCode: CodeInvalidJSON},
 		{name: "syntax error", path: "/api/v1/add", body: `{"a":1,`, wantStatus: 400, wantCode: CodeInvalidJSON},
 		{name: "invalid token", path: "/api/v1/add", body: `{"a":1,"b":two}`, wantStatus: 400, wantCode: CodeInvalidJSON},
@@ -144,7 +139,6 @@ func TestCalculateErrors(t *testing.T) {
 		{name: "trailing garbage", path: "/api/v1/add", body: `{"a":1,"b":2} x`, wantStatus: 400, wantCode: CodeInvalidJSON},
 		{name: "NaN literal", path: "/api/v1/add", body: `{"a":NaN,"b":2}`, wantStatus: 400, wantCode: CodeInvalidJSON},
 
-		// Operand validation.
 		{name: "missing a", path: "/api/v1/add", body: `{"b":2}`, wantStatus: 400, wantCode: CodeMissingOperand},
 		{name: "missing b", path: "/api/v1/add", body: `{"a":2}`, wantStatus: 400, wantCode: CodeMissingOperand},
 		{name: "null operand", path: "/api/v1/add", body: `{"a":null,"b":2}`, wantStatus: 400, wantCode: CodeMissingOperand},

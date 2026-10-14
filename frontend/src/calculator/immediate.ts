@@ -14,11 +14,6 @@ import type {
   ScientificFunction,
 } from './types'
 
-/**
- * Immediate execution, like a desk calculator: each operator is evaluated as
- * soon as the next one is pressed, so 7 + 3 × 2 = 20. Every operation is a
- * single backend call.
- */
 export function immediateReducer(
   state: CalculatorState,
   action: CalculatorAction,
@@ -68,12 +63,10 @@ export function immediateReducer(
     case 'function':
       return applyFunction(state, action.name)
     default:
-      // Parentheses only exist in expression mode.
       return state
   }
 }
 
-/** Updates immediate-mode state with a result from the backend. */
 export function applyImmediateResult(
   state: CalculatorState,
   pending: PendingRequest,
@@ -115,8 +108,6 @@ export function applyImmediateResult(
   }
 }
 
-// --- Selectors ---------------------------------------------------------------
-
 export function selectImmediateDisplay(im: ImmediateState): string {
   if (im.entry?.kind === 'typed') {
     return formatInput(im.entry.text)
@@ -137,26 +128,21 @@ export function selectImmediateExpression(im: ImmediateState): string {
   return ''
 }
 
-// --- Transitions -------------------------------------------------------------
-
 function entryValue(entry: Entry): DecimalString {
   return entry.kind === 'computed' ? entry.value : typedValue(entry.text)
 }
 
-/** The number an operation would act on right now. */
 function currentOperand(im: ImmediateState): DecimalString {
   return im.entry ? entryValue(im.entry) : (im.accumulator ?? '0')
 }
 
 function toggleSign(entry: Entry | null): Entry {
   if (entry === null) {
-    // Awaiting an operand: start typing a negative number.
     return { kind: 'typed', text: '-0' }
   }
   if (entry.kind === 'typed') {
     return { kind: 'typed', text: toggleTextSign(entry.text) }
   }
-  // Flipping the sign of a decimal string is exact, so it needs no round trip.
   return { kind: 'computed', value: negate(entry.value) }
 }
 
@@ -164,7 +150,6 @@ function pressOperator(state: CalculatorState, operator: InfixOperator): Calcula
   const im = state.immediate
   if (im.operator !== null && im.accumulator !== null) {
     if (im.entry === null) {
-      // No second operand yet: the user changed their mind about the operator.
       return { ...state, immediate: { ...im, operator } }
     }
     return infix(state, im.accumulator, im.operator, entryValue(im.entry), {
@@ -187,7 +172,6 @@ function pressOperator(state: CalculatorState, operator: InfixOperator): Calcula
 function pressEquals(state: CalculatorState): CalculatorState {
   const im = state.immediate
   if (im.operator !== null && im.accumulator !== null) {
-    // "5 × =" squares: a missing second operand defaults to the first.
     const operand = im.entry ? entryValue(im.entry) : im.accumulator
     const next = infix(state, im.accumulator, im.operator, operand, { kind: 'equals' })
     return {
@@ -196,12 +180,10 @@ function pressEquals(state: CalculatorState): CalculatorState {
     }
   }
   if (im.lastOperation) {
-    // Repeated "=" applies the previous operation to the current value.
     const { operator, operand } = im.lastOperation
     return infix(state, currentOperand(im), operator, operand, { kind: 'equals' })
   }
   if (im.entry?.kind === 'typed') {
-    // Nothing to evaluate; normalise text such as "5." into a number.
     return {
       ...state,
       immediate: { ...im, entry: { kind: 'computed', value: entryValue(im.entry) } },
@@ -210,11 +192,7 @@ function pressEquals(state: CalculatorState): CalculatorState {
   return state
 }
 
-/**
- * Percent follows the convention of desk calculators: after + or − it means
- * "percent of the first operand" (200 + 10% → 200 + 20); otherwise it simply
- * divides by 100.
- */
+// Desk-calculator convention: after + or −, b% is b percent of the first operand (200 + 10% → 220).
 function pressPercent(state: CalculatorState): CalculatorState {
   const im = state.immediate
   const percent = currentOperand(im)
@@ -228,14 +206,12 @@ function pressPercent(state: CalculatorState): CalculatorState {
   return unary(state, { operation: 'percentage', a: percent, b: '1' }, `${formatOperand(percent)}%`)
 }
 
-/** Applies a function key to the current operand. */
 function applyFunction(state: CalculatorState, name: ScientificFunction): CalculatorState {
   const im = state.immediate
   const a = currentOperand(im)
   const shown = formatOperand(a)
   switch (name) {
     case 'abs': {
-      // Dropping a minus sign is exact, so it needs no round trip.
       const entry: Entry =
         im.entry?.kind === 'typed'
           ? { kind: 'typed', text: im.entry.text.replace(/^-/, '') }

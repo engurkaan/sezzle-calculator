@@ -13,7 +13,6 @@ import { SegmentedControl } from './SegmentedControl'
 type KeypadMode = 'basic' | 'scientific'
 
 interface CalculatorProps {
-  /** Backend used for every calculation; injectable for tests. */
   api: CalculatorApi
 }
 

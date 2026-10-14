@@ -14,28 +14,21 @@ import (
 	"github.com/engurkaan/sezzle-calculator/backend/internal/calculator"
 )
 
-// maxBodyBytes caps request bodies. The largest valid request is an
-// expression of calculator.MaxExpressionLength characters, so anything larger
-// is rejected early instead of being read into memory.
+// Must fit the longest valid expression (calculator.MaxExpressionLength).
 const maxBodyBytes = 4 << 10
 
-// operandsRequest is the wire format for every operation. Operands are kept
-// as raw JSON so that both numbers (5.25) and strings ("5.25") can be parsed
-// from their exact text, without a lossy detour through float64.
+// Raw JSON keeps the exact text of numeric operands; decoding into float64 would lose precision.
 type operandsRequest struct {
 	A         json.RawMessage `json:"a"`
 	B         json.RawMessage `json:"b"`
 	AngleUnit *string         `json:"angleUnit"`
 }
 
-// evaluateRequest is the wire format for POST /api/v1/evaluate.
 type evaluateRequest struct {
 	Expression *string `json:"expression"`
 	AngleUnit  *string `json:"angleUnit"`
 }
 
-// decodeBody reads a single JSON object into v, enforcing the content type,
-// the size limit and the absence of unknown fields or trailing data.
 func decodeBody(w http.ResponseWriter, r *http.Request, v any) *apiError {
 	if err := requireJSON(r); err != nil {
 		return err
@@ -54,7 +47,6 @@ func decodeBody(w http.ResponseWriter, r *http.Request, v any) *apiError {
 	return nil
 }
 
-// decodeAngleUnit validates the optional angleUnit field.
 func decodeAngleUnit(raw *string) (calculator.AngleUnit, *apiError) {
 	if raw == nil {
 		return calculator.Radians, nil
@@ -66,8 +58,6 @@ func decodeAngleUnit(raw *string) (calculator.AngleUnit, *apiError) {
 	return unit, nil
 }
 
-// decodeOperands parses and validates the request body for the named
-// operation, returning exactly arity operands in order (a, then b).
 func decodeOperands(w http.ResponseWriter, r *http.Request, name string, arity int) ([]*apd.Decimal, calculator.Options, *apiError) {
 	var req operandsRequest
 	if err := decodeBody(w, r, &req); err != nil {
@@ -111,8 +101,6 @@ func decodeOperands(w http.ResponseWriter, r *http.Request, name string, arity i
 	return operands, opts, nil
 }
 
-// parseOperand accepts a JSON number or a JSON string containing a decimal
-// number, and parses it exactly.
 func parseOperand(name string, raw json.RawMessage) (*apd.Decimal, *apiError) {
 	var text string
 	switch raw[0] {
@@ -150,7 +138,6 @@ func requireJSON(r *http.Request) *apiError {
 	return nil
 }
 
-// decodeError translates encoding/json failures into client-friendly errors.
 func decodeError(err error) *apiError {
 	var (
 		syntaxErr  *json.SyntaxError
@@ -169,7 +156,6 @@ func decodeError(err error) *apiError {
 	case errors.As(err, &syntaxErr), errors.Is(err, io.ErrUnexpectedEOF):
 		return badRequest(CodeInvalidJSON, "request body is not valid JSON")
 	case errors.As(err, &typeErr):
-		// Operands are raw JSON, so the only possible mismatch is the body itself.
 		return badRequest(CodeInvalidJSON, "request body must be a JSON object")
 	case strings.HasPrefix(err.Error(), "json: unknown field "):
 		// encoding/json does not export a type for this error.

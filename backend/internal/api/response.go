@@ -6,8 +6,6 @@ import (
 	"net/http"
 )
 
-// Machine-readable error codes returned in the "code" field of error
-// responses. Clients should branch on these rather than on messages.
 const (
 	CodeInvalidJSON          = "INVALID_JSON"
 	CodeInvalidOperand       = "INVALID_OPERAND"
@@ -28,12 +26,10 @@ const (
 	CodeInternal             = "INTERNAL_ERROR"
 )
 
-// apiError describes a failed request and how it is rendered over HTTP.
 type apiError struct {
-	Status  int
-	Code    string
-	Message string
-	// Position is the 1-based character offset of a syntax error, if any.
+	Status   int
+	Code     string
+	Message  string
 	Position int
 }
 
@@ -47,20 +43,16 @@ type errorDetail struct {
 	Position int    `json:"position,omitempty"`
 }
 
-// writeJSON serialises v as the response body with the given status code.
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		// Headers are already sent, so the best we can do is record it.
+		// The status line is already sent, so the failure can only be logged.
 		slog.Error("failed to encode response", "error", err)
 	}
 }
 
-// writeError renders e using the standard error envelope:
-//
-//	{"error": {"code": "...", "message": "..."}}
 func writeError(w http.ResponseWriter, e *apiError) {
 	writeJSON(w, e.Status, errorBody{Error: errorDetail{Code: e.Code, Message: e.Message, Position: e.Position}})
 }

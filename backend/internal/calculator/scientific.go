@@ -6,7 +6,6 @@ import (
 	"github.com/cockroachdb/apd/v3"
 )
 
-// Errors for inputs outside a function's domain.
 var (
 	ErrLogDomain        = errors.New("logarithm is only defined for positive numbers")
 	ErrFactorialDomain  = errors.New("factorial is only defined for non-negative integers")
@@ -15,16 +14,13 @@ var (
 	ErrInvalidAngleUnit = errors.New(`angle unit must be "deg" or "rad"`)
 )
 
-// AngleUnit selects how trigonometric functions interpret their argument.
 type AngleUnit string
 
-// Supported angle units.
 const (
 	Radians AngleUnit = "rad"
 	Degrees AngleUnit = "deg"
 )
 
-// ParseAngleUnit validates an angle unit. An empty string means radians.
 func ParseAngleUnit(s string) (AngleUnit, error) {
 	switch AngleUnit(s) {
 	case "", Radians:
@@ -35,7 +31,6 @@ func ParseAngleUnit(s string) (AngleUnit, error) {
 	return "", ErrInvalidAngleUnit
 }
 
-// Mathematical constants to well beyond working precision.
 var (
 	pi = mustDecimal("3.14159265358979323846264338327950288419716939937510" +
 		"58209749445923078164062862089986280348253421170679" +
@@ -44,10 +39,8 @@ var (
 		"95749669676277240766303535475945713821785251664274")
 )
 
-// Pi and E return the constants rounded to Precision digits.
 func Pi() *apd.Decimal { return rounded(pi) }
 
-// E returns Euler's number rounded to Precision digits.
 func E() *apd.Decimal { return rounded(euler) }
 
 func mustDecimal(s string) *apd.Decimal {
@@ -66,8 +59,7 @@ func rounded(x *apd.Decimal) *apd.Decimal {
 	return d
 }
 
-// remCtx is wide enough for the integer quotient of any two in-range
-// operands (up to 10^(MaxExponent−MinExponent)), so remainders are exact.
+// Wide enough for the integer quotient of any two in-range operands, so remainders are exact.
 var remCtx = &apd.Context{
 	Precision:   MaxExponent - MinExponent + Precision,
 	MaxExponent: MaxExponent,
@@ -76,9 +68,6 @@ var remCtx = &apd.Context{
 	Traps:       apd.DefaultTraps,
 }
 
-// Mod returns the remainder of a ÷ b, with the sign of a (like Go's %).
-// The remainder is computed exactly, even when the quotient has thousands
-// of digits, and then rounded to Precision digits.
 func Mod(a, b *apd.Decimal) (*apd.Decimal, error) {
 	if b.IsZero() {
 		return nil, ErrDivisionByZero
@@ -90,7 +79,6 @@ func Mod(a, b *apd.Decimal) (*apd.Decimal, error) {
 	return finish(&rem)
 }
 
-// Ln returns the natural logarithm of a.
 func Ln(a *apd.Decimal) (*apd.Decimal, error) {
 	if a.Sign() <= 0 {
 		return nil, ErrLogDomain
@@ -98,7 +86,6 @@ func Ln(a *apd.Decimal) (*apd.Decimal, error) {
 	return guarded(func(r *apd.Decimal) (apd.Condition, error) { return workCtx.Ln(r, a) })
 }
 
-// Log returns the base-10 logarithm of a.
 func Log(a *apd.Decimal) (*apd.Decimal, error) {
 	if a.Sign() <= 0 {
 		return nil, ErrLogDomain
@@ -106,16 +93,14 @@ func Log(a *apd.Decimal) (*apd.Decimal, error) {
 	return guarded(func(r *apd.Decimal) (apd.Condition, error) { return workCtx.Log10(r, a) })
 }
 
-// Exp returns e raised to a.
 func Exp(a *apd.Decimal) (*apd.Decimal, error) {
 	return guarded(func(r *apd.Decimal) (apd.Condition, error) { return workCtx.Exp(r, a) })
 }
 
-// maxFactorial is the largest n whose factorial fits below 10^MaxExponent
-// (2000! ≈ 3.3e5735); anything larger is rejected without computing it.
+// 2000! ≈ 3.3e5735. Larger factorials overflow MaxExponent, so they are rejected
+// without being computed.
 const maxFactorial = 2000
 
-// Factorial returns n! for a non-negative integer n.
 func Factorial(n *apd.Decimal) (*apd.Decimal, error) {
 	if n.Negative || !isInteger(n) {
 		return nil, ErrFactorialDomain
@@ -142,27 +127,18 @@ func Factorial(n *apd.Decimal) (*apd.Decimal, error) {
 	})
 }
 
-// --- Trigonometry --------------------------------------------------------
-//
-// apd has no trigonometric functions, so they are computed here: the
-// argument is reduced to [-π/4, π/4] plus a quadrant, then evaluated with a
-// Taylor series at extra working precision and rounded once at the end.
-// In degrees the reduction is exact decimal arithmetic, so multiples of 90°
-// produce exact results (sin 180° = 0, cos 90° = 0, tan 90° is undefined).
+// apd has no trigonometry. The argument is reduced to [-π/4, π/4] plus a quadrant and a Taylor
+// series is summed with guard digits. Degree arguments are reduced exactly, so multiples of 90°
+// give exact results (sin 180° = 0, tan 90° is undefined).
 
-// maxTrigArgument bounds |x|. Reducing a larger radian argument would need
-// more digits of π than are stored above.
+// Reducing larger radian arguments would need more digits of π than are stored.
 var maxTrigArgument = apd.New(1, 40)
 
 var (
-	// reduceCtx is wide enough to reduce arguments up to maxTrigArgument
-	// exactly (degrees) or to ~70 correct digits (radians).
 	reduceCtx = &apd.Context{Precision: 120, MaxExponent: MaxExponent, MinExponent: MinExponent, Rounding: apd.RoundHalfEven, Traps: apd.DefaultTraps}
-	// workCtx carries guard digits through the series before final rounding.
-	workCtx = &apd.Context{Precision: Precision + 16, MaxExponent: MaxExponent, MinExponent: MinExponent, Rounding: apd.RoundHalfEven, Traps: apd.DefaultTraps}
+	workCtx   = &apd.Context{Precision: Precision + 16, MaxExponent: MaxExponent, MinExponent: MinExponent, Rounding: apd.RoundHalfEven, Traps: apd.DefaultTraps}
 )
 
-// Sin returns the sine of x.
 func Sin(x *apd.Decimal, unit AngleUnit) (*apd.Decimal, error) {
 	s, _, err := sinCos(x, unit)
 	if err != nil {
@@ -171,7 +147,6 @@ func Sin(x *apd.Decimal, unit AngleUnit) (*apd.Decimal, error) {
 	return finish(s)
 }
 
-// Cos returns the cosine of x.
 func Cos(x *apd.Decimal, unit AngleUnit) (*apd.Decimal, error) {
 	_, c, err := sinCos(x, unit)
 	if err != nil {
@@ -180,7 +155,6 @@ func Cos(x *apd.Decimal, unit AngleUnit) (*apd.Decimal, error) {
 	return finish(c)
 }
 
-// Tan returns the tangent of x.
 func Tan(x *apd.Decimal, unit AngleUnit) (*apd.Decimal, error) {
 	s, c, err := sinCos(x, unit)
 	if err != nil {
@@ -196,9 +170,8 @@ func Tan(x *apd.Decimal, unit AngleUnit) (*apd.Decimal, error) {
 	return finish(t)
 }
 
-// guarded runs op at working precision and rounds the result once, so that
-// transcendental functions are correctly rounded in practice (apd alone only
-// guarantees an error below one unit in the last place).
+// apd only guarantees transcendental results to within one unit in the last place, so they are
+// computed with guard digits and rounded once.
 func guarded(op func(result *apd.Decimal) (apd.Condition, error)) (*apd.Decimal, error) {
 	wide, err := apply(op)
 	if err != nil {
@@ -207,12 +180,10 @@ func guarded(op func(result *apd.Decimal) (apd.Condition, error)) (*apd.Decimal,
 	return finish(wide)
 }
 
-// finish rounds a working-precision value to the public precision.
 func finish(x *apd.Decimal) (*apd.Decimal, error) {
 	return apply(func(r *apd.Decimal) (apd.Condition, error) { return ctx.Round(r, x) })
 }
 
-// sinCos returns sin x and cos x at working precision.
 func sinCos(x *apd.Decimal, unit AngleUnit) (sin, cos *apd.Decimal, err error) {
 	var abs apd.Decimal
 	abs.Abs(x)
@@ -244,8 +215,6 @@ func sinCos(x *apd.Decimal, unit AngleUnit) (sin, cos *apd.Decimal, err error) {
 	}
 }
 
-// reduce writes x as quadrant·(π/2) + r with |r| ≤ π/4, returning r in
-// radians at working precision and the quadrant in 0..3.
 func reduce(x *apd.Decimal, unit AngleUnit) (*apd.Decimal, int64, error) {
 	var period, quarter apd.Decimal
 	if unit == Degrees {
@@ -259,7 +228,6 @@ func reduce(x *apd.Decimal, unit AngleUnit) (*apd.Decimal, int64, error) {
 		return nil, 0, err
 	}
 
-	// k = round(x / quarter); r = x − k·quarter
 	var k, kq, r apd.Decimal
 	if _, err := reduceCtx.Quo(&k, x, &quarter); err != nil {
 		return nil, 0, err
@@ -285,7 +253,6 @@ func reduce(x *apd.Decimal, unit AngleUnit) (*apd.Decimal, int64, error) {
 	quadrant = (quadrant%4 + 4) % 4
 
 	if unit == Degrees && !r.IsZero() {
-		// r° → radians: r · π / 180
 		if _, err := workCtx.Mul(&r, &r, pi); err != nil {
 			return nil, 0, err
 		}
@@ -296,19 +263,16 @@ func reduce(x *apd.Decimal, unit AngleUnit) (*apd.Decimal, int64, error) {
 	return &r, quadrant, nil
 }
 
-// sinSeries evaluates sin r = r − r³/3! + r⁵/5! − … for small |r|.
 func sinSeries(r *apd.Decimal) *apd.Decimal {
 	return taylor(r, new(apd.Decimal).Set(r), 2)
 }
 
-// cosSeries evaluates cos r = 1 − r²/2! + r⁴/4! − … for small |r|.
 func cosSeries(r *apd.Decimal) *apd.Decimal {
 	return taylor(r, apd.New(1, 0), 1)
 }
 
-// taylor sums the alternating series whose first term is first and whose
-// n-th term is the previous one times −r²/((m)(m+1)), with m starting at
-// firstDenominator and advancing by 2.
+// taylor sums an alternating series: each term is the previous one times −r²/(m(m+1)), with m
+// starting at firstDenominator and increasing by 2.
 func taylor(r, first *apd.Decimal, firstDenominator int64) *apd.Decimal {
 	var r2 apd.Decimal
 	_, _ = workCtx.Mul(&r2, r, r)

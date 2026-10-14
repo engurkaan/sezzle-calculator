@@ -10,9 +10,6 @@ import (
 	"strings"
 )
 
-// WithStatic serves the API alongside a built single-page application found
-// in dir. API routes keep their behaviour; any other path is served from dir,
-// falling back to index.html so client-side routes survive a page reload.
 func WithStatic(apiHandler http.Handler, dir string) (http.Handler, error) {
 	fsys := os.DirFS(dir)
 	if _, err := fs.Stat(fsys, "index.html"); err != nil {
@@ -43,7 +40,7 @@ func spaHandler(fsys fs.FS) http.Handler {
 			return
 		}
 
-		// Vite fingerprints everything under assets/, so it can be cached forever.
+		// Vite fingerprints files under assets/, so they never change.
 		if strings.HasPrefix(name, "assets/") {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
@@ -52,7 +49,7 @@ func spaHandler(fsys fs.FS) http.Handler {
 }
 
 func serveIndex(w http.ResponseWriter, r *http.Request, fsys fs.FS) {
-	// index.html references the current asset hashes, so it must always be revalidated.
+	// index.html points at the current asset hashes, so it must always be revalidated.
 	w.Header().Set("Cache-Control", "no-cache")
 	http.ServeFileFS(w, r, fsys, "index.html")
 }

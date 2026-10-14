@@ -1,4 +1,3 @@
-// Package config loads server configuration from environment variables.
 package config
 
 import (
@@ -7,29 +6,19 @@ import (
 	"strings"
 )
 
-// Defaults used when the corresponding variable is unset or empty.
 const (
 	DefaultPort           = 8080
 	DefaultAllowedOrigins = "http://localhost:5173"
 )
 
-// Config holds the runtime settings of the server.
 type Config struct {
-	// Port is the TCP port to listen on (PORT).
-	Port int
-	// AllowedOrigins lists the browser origins allowed by CORS
-	// (ALLOWED_ORIGINS, comma separated; "*" allows any origin).
+	Port           int
 	AllowedOrigins []string
-	// StaticDir, when set, is a directory containing the built frontend to
-	// serve alongside the API (STATIC_DIR).
-	StaticDir string
+	StaticDir      string
 }
 
-// Addr returns the listen address for Port.
 func (c Config) Addr() string { return ":" + strconv.Itoa(c.Port) }
 
-// Load reads the configuration through getenv, which is usually os.Getenv.
-// Taking it as a parameter keeps Load free of global state in tests.
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{Port: DefaultPort}
 

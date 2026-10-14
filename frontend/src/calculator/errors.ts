@@ -12,7 +12,6 @@ const MESSAGES: Partial<Record<string, string>> = {
   TIMEOUT: 'Request timed out',
 }
 
-/** Turns any failure into a short message that fits the calculator display. */
 export function toDisplayMessage(err: unknown): string {
   if (err instanceof ApiError) {
     return MESSAGES[err.code] ?? 'Something went wrong'

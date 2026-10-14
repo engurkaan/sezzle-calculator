@@ -10,7 +10,6 @@ export const initialImmediate: ImmediateState = {
 
 export const initialExpression: ExpressionState = { tokens: [], result: null }
 
-/** Queues a backend call; useCalculator sends it and dispatches the outcome. */
 export function queue(
   state: CalculatorState,
   call: ApiCall,

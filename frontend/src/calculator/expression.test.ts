@@ -50,18 +50,15 @@ function action(key: string): CalculatorAction {
 
 const expressionMode = () => createInitialState({ evaluation: 'expression' })
 
-/** Presses keys without answering any request. */
 function type(keys: string, state: CalculatorState = expressionMode()): CalculatorState {
   return [...keys].reduce((s, key) => calculatorReducer(s, action(key)), state)
 }
 
-/** The expression that "=" would send to the backend. */
 function wireOf(keys: string): string | undefined {
   const pending = calculatorReducer(type(keys), { type: 'equals' }).pending
   return pending?.call.kind === 'evaluate' ? pending.call.request.expression : undefined
 }
 
-/** Presses "=" and answers with the given result. */
 function evaluateTo(state: CalculatorState, result: string): CalculatorState {
   const pending = calculatorReducer(state, { type: 'equals' })
   return calculatorReducer(pending, { type: 'resolve', id: pending.pending?.id ?? 0, result })

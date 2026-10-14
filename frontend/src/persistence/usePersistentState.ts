@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { load, save } from './storage'
 
-/** useState that survives page reloads. Invalid stored values are ignored. */
 export function usePersistentState<T>(
   key: string,
   fallback: T,

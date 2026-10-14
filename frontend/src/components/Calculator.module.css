@@ -40,8 +40,6 @@
     width: 22.5rem;
   }
 
-  /* The scientific keys sit to the left of the keypad, with key sizes
-     matching the basic keypad. */
   .calculator[data-keypad='scientific'] {
     width: 37.5rem;
   }

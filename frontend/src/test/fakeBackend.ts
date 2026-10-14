@@ -8,14 +8,6 @@ import type {
   EvaluationResponse,
 } from '../api/types'
 
-/**
- * In-memory stand-in for the Go service so frontend tests can exercise full
- * flows without a network. It mirrors the backend's error codes, and its
- * arithmetic is exact decimal (BigInt-based) for + − × % and integer powers.
- * Division is truncated to 34 digits; √, fractional powers and the scientific
- * functions fall back to floats, which is enough for the values tests use.
- */
-
 /** value = coefficient × 10^-scale */
 interface Decimal {
   coefficient: bigint
@@ -163,7 +155,6 @@ function compute(request: CalculationRequest): Decimal {
   }
 }
 
-/** Float results rounded to 12 digits, which hides binary noise in tests. */
 function float(x: number): Decimal {
   return parse(String(Number(x.toPrecision(12))))
 }
@@ -182,11 +173,7 @@ export async function fakeCalculate(request: CalculationRequest): Promise<Calcul
   return { operation: request.operation, operands, result }
 }
 
-/**
- * A fake API for components and hooks. Expression evaluation is the backend's
- * job (and tested there), so evaluate answers from a table of expected
- * expressions, and tests assert on the expression the UI sent.
- */
+// Expression evaluation is tested in the backend, so here it is a lookup table.
 export function createFakeApi(evaluations: Record<string, DecimalString> = {}): CalculatorApi {
   return {
     calculate: fakeCalculate,

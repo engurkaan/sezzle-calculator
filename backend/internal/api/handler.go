@@ -1,4 +1,3 @@
-// Package api exposes the calculator over a JSON REST interface.
 package api
 
 import (
@@ -8,43 +7,31 @@ import (
 	"github.com/engurkaan/sezzle-calculator/backend/internal/calculator"
 )
 
-// CalculationResponse is the success payload for every operation. Numbers are
-// encoded as decimal strings: JSON numbers would be parsed into binary floats
-// by most clients (including every browser), silently losing precision.
+// Numbers are strings because most JSON clients, browsers included, would parse them into
+// binary floats and lose precision.
 type CalculationResponse struct {
 	Operation string   `json:"operation"`
 	Operands  []string `json:"operands"`
 	Result    string   `json:"result"`
 }
 
-// EvaluationResponse is the success payload for POST /api/v1/evaluate.
 type EvaluationResponse struct {
 	Expression string `json:"expression"`
 	Result     string `json:"result"`
 }
 
-// OperationInfo describes one supported operation for discovery clients.
 type OperationInfo struct {
 	Name     string `json:"name"`
 	Operands int    `json:"operands"`
 }
 
-// NewHandler returns an http.Handler serving the calculator API:
-//
-//	GET  /healthz
-//	GET  /api/v1/operations
-//	POST /api/v1/evaluate
-//	POST /api/v1/{operation}
-//
-// Every response under /api, including 404 and 405, uses a JSON body.
 func NewHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealth)
 	mux.HandleFunc("GET /api/v1/operations", handleListOperations)
 	mux.HandleFunc("POST /api/v1/evaluate", handleEvaluate)
 	mux.HandleFunc("POST /api/v1/{operation}", handleCalculate)
-	// Less specific patterns catch everything the routes above do not, so
-	// that clients always receive the JSON error envelope.
+	// Catch-all routes so that 404 and 405 responses also use the JSON error envelope.
 	mux.HandleFunc("/api/v1/{operation}", methodNotAllowed)
 	mux.HandleFunc("/api/", notFound)
 	return mux
@@ -99,7 +86,6 @@ func handleCalculate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleEvaluate evaluates a whole expression with operator precedence.
 func handleEvaluate(w http.ResponseWriter, r *http.Request) {
 	var req evaluateRequest
 	if apiErr := decodeBody(w, r, &req); apiErr != nil {
@@ -138,8 +124,6 @@ func handleEvaluate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// domainError maps calculator errors onto HTTP errors. Domain failures are
-// reported as 422: the request was well formed but cannot be computed.
 func domainError(err error) *apiError {
 	e := &apiError{Status: http.StatusUnprocessableEntity, Message: err.Error()}
 	switch {

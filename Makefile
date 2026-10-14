@@ -1,5 +1,3 @@
-# Convenience targets for working on the whole repository.
-# Run `make help` to list them.
 
 IMAGE ?= sezzle-calculator
 

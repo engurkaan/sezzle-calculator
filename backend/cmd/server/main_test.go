@@ -13,7 +13,6 @@ import (
 	"time"
 )
 
-// freePort asks the kernel for an unused port.
 func freePort(t *testing.T) int {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

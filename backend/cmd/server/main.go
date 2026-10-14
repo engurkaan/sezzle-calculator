@@ -1,4 +1,3 @@
-// Command server runs the calculator REST API.
 package main
 
 import (
@@ -24,8 +23,7 @@ func main() {
 	healthcheck := flag.Bool("healthcheck", false, "probe the local server's /healthz and exit 0 if healthy")
 	flag.Parse()
 	if *healthcheck {
-		// Lets container runtimes check health without a shell or curl in
-		// the (distroless) image.
+		// The distroless image has no shell or curl for a HEALTHCHECK.
 		if err := probe(os.Getenv); err != nil {
 			fmt.Fprintln(os.Stderr, "unhealthy:", err)
 			os.Exit(1)
@@ -43,9 +41,6 @@ func main() {
 	}
 }
 
-// run starts the server and blocks until ctx is cancelled, then shuts down
-// gracefully. If ready is non-nil it receives the bound address once the
-// server is accepting connections.
 func run(ctx context.Context, getenv func(string) string, logger *slog.Logger, ready chan<- string) error {
 	cfg, err := config.Load(getenv)
 	if err != nil {
@@ -107,7 +102,6 @@ func run(ctx context.Context, getenv func(string) string, logger *slog.Logger, r
 	return nil
 }
 
-// probe performs a single health check against the server on the configured port.
 func probe(getenv func(string) string) error {
 	cfg, err := config.Load(getenv)
 	if err != nil {

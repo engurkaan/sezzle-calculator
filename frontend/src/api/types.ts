@@ -1,25 +1,16 @@
-/** Operations that take two operands: `a` and `b`. */
 export type BinaryOperation =
   'add' | 'subtract' | 'multiply' | 'divide' | 'power' | 'percentage' | 'mod'
 
-/** Operations that take a single operand: `a`. */
 export type UnaryOperation = 'sqrt' | 'ln' | 'log' | 'exp' | 'factorial'
 
-/** Trigonometric operations, which also take an angle unit. */
 export type TrigOperation = 'sin' | 'cos' | 'tan'
 
 export type Operation = BinaryOperation | UnaryOperation | TrigOperation
 
 export type AngleUnit = 'deg' | 'rad'
 
-/**
- * A decimal number as text, e.g. "12.5", "-0.001" or "1.5e+40".
- *
- * Numbers cross the API as strings because JavaScript numbers are binary
- * floats: parsing "0.1" or a 34-digit result into a `number` would silently
- * change its value. The frontend never does arithmetic on them; it only
- * forwards and formats them.
- */
+// Numbers cross the API as strings: parsing them into a JavaScript number (a binary float)
+// would change their value.
 export type DecimalString = string
 
 export type CalculationRequest =
@@ -27,18 +18,12 @@ export type CalculationRequest =
   | { operation: UnaryOperation; a: DecimalString }
   | { operation: TrigOperation; a: DecimalString; angleUnit: AngleUnit }
 
-/** Success payload returned by `POST /api/v1/{operation}`. */
 export interface CalculationResponse {
   operation: Operation
   operands: DecimalString[]
   result: DecimalString
 }
 
-/**
- * Body of `POST /api/v1/evaluate`: a whole expression evaluated with operator
- * precedence. Operators are + - * / ^ mod, postfix ! and %, functions sqrt,
- * sin, cos, tan, ln, log, exp and abs, and the constants pi and e.
- */
 export interface EvaluationRequest {
   expression: string
   angleUnit: AngleUnit
@@ -49,7 +34,6 @@ export interface EvaluationResponse {
   result: DecimalString
 }
 
-/** Error codes produced by the backend. */
 export type ServerErrorCode =
   | 'INVALID_JSON'
   | 'INVALID_OPERAND'
@@ -69,7 +53,6 @@ export type ServerErrorCode =
   | 'RESULT_OUT_OF_RANGE'
   | 'INTERNAL_ERROR'
 
-/** Error codes produced by the client when no usable response arrives. */
 export type ClientErrorCode = 'NETWORK_ERROR' | 'TIMEOUT' | 'INVALID_RESPONSE' | 'HTTP_ERROR'
 
 export type ApiErrorCode = ServerErrorCode | ClientErrorCode

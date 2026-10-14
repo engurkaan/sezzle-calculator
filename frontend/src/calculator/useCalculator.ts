@@ -50,12 +50,6 @@ function send(api: CalculatorApi, call: ApiCall, signal: AbortSignal) {
     : api.evaluate(call.request, signal)
 }
 
-/**
- * Connects the calculator state machine to the backend: whenever the reducer
- * queues a request, it is sent through `api` and the outcome is dispatched
- * back. Superseded requests (e.g. after AC) are aborted. History and settings
- * are kept in localStorage so they survive reloads until the user deletes them.
- */
 export function useCalculator(api: CalculatorApi) {
   const [state, dispatch] = useReducer(calculatorReducer, undefined, () =>
     createInitialState({

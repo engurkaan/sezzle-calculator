@@ -12,7 +12,6 @@ func TestEvaluate(t *testing.T) {
 		unit AngleUnit
 		want string
 	}{
-		// Precedence and associativity.
 		{expr: "7+3*2", want: "13"},
 		{expr: "(7+3)*2", want: "20"},
 		{expr: "2+3*4-1", want: "13"},
@@ -28,13 +27,11 @@ func TestEvaluate(t *testing.T) {
 		{expr: "10 mod 4 * 2", want: "4"},
 		{expr: "1 + 10 mod 4", want: "3"},
 
-		// Exact decimals.
 		{expr: "0.1+0.2", want: "0.3"},
 		{expr: "0.1*3-0.3", want: "0"},
 		{expr: "1/3*3", want: "0.9999999999999999999999999999999999"},
 		{expr: "1.5e3 + .5", want: "1500.5"},
 
-		// Postfix operators.
 		{expr: "5!", want: "120"},
 		{expr: "3!!", want: "720"},
 		{expr: "2*3!", want: "12"},
@@ -44,7 +41,6 @@ func TestEvaluate(t *testing.T) {
 		{expr: "200*10%", want: "20"},
 		{expr: "(100+50)+10%", want: "165"},
 
-		// Functions and constants.
 		{expr: "sqrt(144)", want: "12"},
 		{expr: "sqrt(9)+sqrt(16)", want: "7"},
 		{expr: "abs(-3.5)", want: "3.5"},
@@ -60,7 +56,6 @@ func TestEvaluate(t *testing.T) {
 		{expr: "cos(60)+sin(30)", unit: Degrees, want: "1"},
 		{expr: "SIN(90)", unit: Degrees, want: "1"},
 
-		// Whitespace and nesting.
 		{expr: "  ( ( 1 + 2 ) * ( 3 + 4 ) )  ", want: "21"},
 	}
 	for _, tc := range cases {
@@ -92,7 +87,6 @@ func TestEvaluateDomainErrors(t *testing.T) {
 		{expr: "10^7000", wantErr: ErrOutOfRange},
 		{expr: "5 mod 0", wantErr: ErrDivisionByZero},
 
-		// Errors propagate out of every kind of node.
 		{expr: "-(1/0)", wantErr: ErrDivisionByZero},
 		{expr: "(1/0)!", wantErr: ErrDivisionByZero},
 		{expr: "(1/0)%", wantErr: ErrDivisionByZero},

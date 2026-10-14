@@ -24,7 +24,6 @@ import type {
 
 export { MAX_INPUT_DIGITS } from './input'
 
-/** Maximum number of entries kept in the history panel. */
 export const MAX_HISTORY = 50
 
 export const initialState: CalculatorState = {
@@ -38,14 +37,12 @@ export const initialState: CalculatorState = {
   nextId: 1,
 }
 
-/** Settings and history restored from a previous session. */
 export interface RestoredSession {
   history?: HistoryEntry[]
   evaluation?: Evaluation
   angleUnit?: AngleUnit
 }
 
-/** Initial state, optionally restored from a previous session. */
 export function createInitialState({
   history = [],
   evaluation = initialState.evaluation,
@@ -55,16 +52,6 @@ export function createInitialState({
   return { ...initialState, evaluation, angleUnit, history: history.slice(0, MAX_HISTORY), nextId }
 }
 
-/**
- * Pure state machine behind the keypad.
- *
- * Session-level actions (results, history, settings) are handled here, and
- * keypad input is delegated to the active evaluation mode. The reducer never
- * does arithmetic itself: when something must be computed it stores a
- * PendingRequest, which useCalculator sends to the backend before dispatching
- * `resolve` or `reject`. While a request is in flight every input except
- * `clear` is ignored, so results cannot interleave.
- */
 export function calculatorReducer(
   state: CalculatorState,
   action: CalculatorAction,
@@ -85,8 +72,6 @@ export function calculatorReducer(
     case 'deleteHistoryEntry':
       return { ...state, history: state.history.filter((entry) => entry.id !== action.id) }
     case 'setEvaluation':
-      // Switching modes starts a fresh calculation; the two modes do not
-      // share an in-progress state.
       return action.evaluation === state.evaluation
         ? state
         : { ...reset(state), evaluation: action.evaluation }
@@ -100,10 +85,8 @@ export function calculatorReducer(
 
   if (state.error) {
     if (state.evaluation === 'expression') {
-      // Keep the expression so the user can fix it, e.g. with backspace.
       return expressionReducer({ ...state, error: null }, action)
     }
-    // Any key dismisses the error. Keys that start a new number also apply.
     const fresh = reset(state)
     switch (action.type) {
       case 'digit':
@@ -122,9 +105,6 @@ export function calculatorReducer(
     : expressionReducer(state, action)
 }
 
-// --- Selectors -------------------------------------------------------------
-
-/** Text for the main display. */
 export function selectDisplay(state: CalculatorState): string {
   if (state.error) {
     return state.error
@@ -134,7 +114,6 @@ export function selectDisplay(state: CalculatorState): string {
     : selectExpressionDisplay(state.expression)
 }
 
-/** Text for the secondary line above the display, e.g. "12 +" or "12 + 7 =". */
 export function selectExpression(state: CalculatorState): string {
   if (state.pending) {
     return state.pending.expression
@@ -142,19 +121,15 @@ export function selectExpression(state: CalculatorState): string {
   if (state.evaluation === 'immediate') {
     return selectImmediateExpression(state.immediate)
   }
-  // After an error the expression is kept for editing; show what failed.
   return state.error
     ? formatTokens(state.expression.tokens)
     : selectExpressionLine(state.expression)
 }
 
-/** The operator awaiting its second operand, if any (used to highlight its key). */
 export function selectActiveOperator(state: CalculatorState): InfixOperator | null {
   const im = state.immediate
   return state.evaluation === 'immediate' && im.entry === null ? im.operator : null
 }
-
-// --- Transitions -----------------------------------------------------------
 
 function reset(state: CalculatorState): CalculatorState {
   return {

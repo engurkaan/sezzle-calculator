@@ -8,10 +8,8 @@ import (
 	"time"
 )
 
-// Middleware wraps an http.Handler with additional behaviour.
 type Middleware func(http.Handler) http.Handler
 
-// Chain applies middlewares so that the first one listed is the outermost.
 func Chain(h http.Handler, middlewares ...Middleware) http.Handler {
 	for _, m := range slices.Backward(middlewares) {
 		h = m(h)
@@ -19,8 +17,6 @@ func Chain(h http.Handler, middlewares ...Middleware) http.Handler {
 	return h
 }
 
-// Recover converts panics into a 500 JSON response instead of dropping the
-// connection, and logs the panic value.
 func Recover(logger *slog.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +39,6 @@ func Recover(logger *slog.Logger) Middleware {
 	}
 }
 
-// statusRecorder captures the status code written by downstream handlers.
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
@@ -56,7 +51,6 @@ func (r *statusRecorder) WriteHeader(status int) {
 
 func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
-// Logger emits one structured log line per request.
 func Logger(logger *slog.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -73,8 +67,6 @@ func Logger(logger *slog.Logger) Middleware {
 	}
 }
 
-// CORS allows browsers on the given origins to call the API. A single "*"
-// entry allows any origin. Preflight requests are answered directly.
 func CORS(allowedOrigins []string) Middleware {
 	allowAny := slices.Contains(allowedOrigins, "*")
 	const maxAge = 10 * time.Minute

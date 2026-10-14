@@ -15,14 +15,6 @@ import type {
   Token,
 } from './types'
 
-/**
- * Expression mode: keys build an expression such as "7 + 3 × 2", and "="
- * sends the whole expression to the backend, which applies standard operator
- * precedence (= 13). The reducer only enforces that the expression stays
- * well formed while it is typed; it never evaluates anything.
- */
-
-/** Matches the backend's limit on expression length. */
 export const MAX_EXPRESSION_LENGTH = 1000
 
 const POSTFIX_FUNCTIONS: Partial<Record<ScientificFunction, PostfixOperator>> = {
@@ -40,8 +32,7 @@ export function expressionReducer(
   const set = (next: ExpressionState): CalculatorState =>
     toWire(next.tokens).length > MAX_EXPRESSION_LENGTH ? state : { ...state, expression: next }
 
-  // After "=", keys that start a value begin a new expression, while
-  // operators continue from the result.
+  // After "=", keys that start a value begin a new expression; operators continue from the result.
   const fresh: Token[] = ex.result ? [] : ex.tokens
   const continued: Token[] = ex.result ? [{ kind: 'value', value: ex.result.value }] : ex.tokens
   const last = fresh.at(-1)
@@ -106,7 +97,6 @@ export function expressionReducer(
   }
 }
 
-/** Updates expression-mode state with a result from the backend. */
 export function applyExpressionResult(
   state: CalculatorState,
   pending: PendingRequest,
@@ -118,8 +108,6 @@ export function applyExpressionResult(
   }
 }
 
-// --- Selectors ---------------------------------------------------------------
-
 export function selectExpressionDisplay(ex: ExpressionState): string {
   if (ex.tokens.length > 0) {
     return formatTokens(ex.tokens)
@@ -130,8 +118,6 @@ export function selectExpressionDisplay(ex: ExpressionState): string {
 export function selectExpressionLine(ex: ExpressionState): string {
   return ex.result && ex.tokens.length === 0 ? `${ex.result.expression} =` : ''
 }
-
-// --- Display and wire formats -------------------------------------------------
 
 const POSTFIX_SYMBOLS: Record<PostfixOperator, string> = {
   factorial: '!',
@@ -160,7 +146,6 @@ const OPERATOR_WIRE: Record<InfixOperator, string> = {
 
 const FUNCTION_SYMBOLS: Partial<Record<PrefixFunction, string>> = { sqrt: '√' }
 
-/** Human-readable expression, e.g. "7 + 3 × √(16)". */
 export function formatTokens(tokens: Token[]): string {
   return tokens
     .map((token, i) => {
@@ -189,7 +174,6 @@ export function formatTokens(tokens: Token[]): string {
     .trim()
 }
 
-/** The expression in the backend's grammar, e.g. "7+3*sqrt(16)". */
 export function toWire(tokens: Token[]): string {
   return tokens
     .map((token) => {
@@ -217,7 +201,7 @@ export function toWire(tokens: Token[]): string {
     .join('')
 }
 
-/** Negative numbers are parenthesised so that "(-5)²" is not read as −(5²). */
+// "(-5)^2", not "-5^2", which the backend reads as -(5^2).
 function wrapNegative(value: string): string {
   return value.startsWith('-') ? `(${value})` : value
 }
@@ -228,9 +212,6 @@ function parenthesizeIfNegative(shown: string, next: Token | undefined): string 
   return shown.startsWith('-') && bindsTighter ? `(${shown})` : shown
 }
 
-// --- Helpers -------------------------------------------------------------------
-
-/** Whether the expression currently ends with a complete operand. */
 function endsOperand(tokens: Token[]): boolean {
   const last = tokens.at(-1)
   if (!last) {
@@ -250,7 +231,6 @@ function openParens(tokens: Token[]): number {
   }, 0)
 }
 
-/** Appends a token that begins an operand, inserting "×" for implicit products like 2π. */
 function append(tokens: Token[], token: Token): Token[] {
   return endsOperand(tokens)
     ? [...tokens, { kind: 'operator', operator: 'multiply' }, token]
@@ -276,11 +256,9 @@ function addOperator(
     return set(start([...tokens, { kind: 'operator', operator }]))
   }
   if (operator === 'subtract' && last?.kind !== 'negate') {
-    // A minus where an operand is expected is a unary minus: "2 × −3".
     return set(start([...tokens, { kind: 'negate' }]))
   }
   if (last?.kind === 'operator') {
-    // Two operators in a row: the user changed their mind.
     return set(start([...tokens.slice(0, -1), { kind: 'operator', operator }]))
   }
   return state
@@ -335,10 +313,8 @@ function recall(tokens: Token[], value: DecimalString): Token[] {
 function pressEquals(state: CalculatorState): CalculatorState {
   const { tokens } = state.expression
   if (!endsOperand(tokens)) {
-    // Nothing to evaluate yet, or the expression ends with an operator.
     return state
   }
-  // Close any parentheses the user left open: "√(16" means "√(16)".
   const closed: Token[] = [
     ...tokens,
     ...Array.from({ length: openParens(tokens) }, (): Token => ({ kind: 'close' })),

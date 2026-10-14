@@ -28,7 +28,6 @@ const KEY_ACTIONS: Record<string, CalculatorAction> = {
   C: { type: 'clear' },
 }
 
-/** Maps a KeyboardEvent.key value to a calculator action, if any. */
 export function keyToAction(key: string): CalculatorAction | null {
   if (/^\d$/.test(key)) {
     return { type: 'digit', digit: key }
@@ -43,9 +42,7 @@ function isEditable(target: EventTarget | null): boolean {
   )
 }
 
-/** Lets the whole calculator be driven from the keyboard. */
 export function useKeyboard(onAction: (action: CalculatorAction) => void): void {
-  // Keep the latest callback without re-subscribing on every render.
   const handler = useRef(onAction)
   useEffect(() => {
     handler.current = onAction
@@ -60,8 +57,7 @@ export function useKeyboard(onAction: (action: CalculatorAction) => void): void 
       if (!action) {
         return
       }
-      // Stops Enter from also "clicking" a focused key, and / from opening
-      // the browser's quick find.
+      // Stops Enter from also clicking a focused key, and / from opening quick find.
       event.preventDefault()
       handler.current(action)
     }

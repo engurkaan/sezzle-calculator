@@ -79,8 +79,7 @@
   color: var(--display-muted);
 }
 
-/* Fades in only if a request takes noticeably long, so fast responses
-   do not flicker. */
+/* Delayed so that fast responses do not flash a spinner. */
 .spinner {
   width: 0.875rem;
   height: 0.875rem;

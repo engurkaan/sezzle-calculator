@@ -8,10 +8,8 @@ interface KeypadProps {
   keys: KeyDefinition[]
   onAction: (action: CalculatorAction) => void
   activeOperator: InfixOperator | null
-  /** Ids of keys that cannot be used in the current mode. */
   disabled?: ReadonlySet<string>
   layout?: 'basic' | 'scientific'
-  /** Extra keys rendered after the defined ones. */
   children?: ReactNode
 }
 
@@ -39,8 +37,7 @@ export function Keypad({
             data-span={key.span}
             aria-label={key.ariaLabel}
             aria-pressed={isOperator ? activeOperator === key.id : undefined}
-            // aria-disabled keeps the key focusable, so focus is not lost when
-            // the mode changes; the reducer ignores the action anyway.
+            // aria-disabled, unlike disabled, keeps focus on the key when the mode changes.
             aria-disabled={isDisabled || undefined}
             title={
               isDisabled
@@ -71,7 +68,6 @@ interface KeyButtonProps {
   onClick: () => void
 }
 
-/** A stand-alone key for state-dependent buttons such as DEG/RAD. */
 export function KeyButton({ label, ariaLabel, title, onClick }: KeyButtonProps) {
   return (
     <button

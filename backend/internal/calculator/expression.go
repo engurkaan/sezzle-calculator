@@ -23,18 +23,14 @@ import (
 // "a + b%" and "a - b%" mean "a plus/minus b percent of a" (200 + 10% = 220);
 // anywhere else b% is b/100.
 
-// Limits that keep a single request cheap to parse and evaluate.
 const (
 	MaxExpressionLength = 1000
 	maxNestingDepth     = 64
 )
 
-// ErrInvalidExpression is the sentinel wrapped by every syntax error.
 var ErrInvalidExpression = errors.New("invalid expression")
 
-// SyntaxError describes where an expression could not be parsed.
 type SyntaxError struct {
-	// Position is the 1-based character offset of the problem.
 	Position int
 	Message  string
 }
@@ -45,8 +41,6 @@ func (e *SyntaxError) Error() string {
 
 func (e *SyntaxError) Unwrap() error { return ErrInvalidExpression }
 
-// Evaluate parses and evaluates an arithmetic expression. Syntax errors wrap
-// ErrInvalidExpression; evaluation errors are the usual domain errors.
 func Evaluate(expression string, opts Options) (*apd.Decimal, error) {
 	tree, err := ParseExpression(expression)
 	if err != nil {
@@ -59,8 +53,6 @@ func Evaluate(expression string, opts Options) (*apd.Decimal, error) {
 	return tree.eval(unit)
 }
 
-// ParseExpression parses an expression into a syntax tree without
-// evaluating it.
 func ParseExpression(expression string) (Node, error) {
 	if len(expression) > MaxExpressionLength {
 		return nil, &SyntaxError{Position: MaxExpressionLength + 1, Message: fmt.Sprintf("expression is longer than %d characters", MaxExpressionLength)}
@@ -80,15 +72,13 @@ func ParseExpression(expression string) (Node, error) {
 	return tree, nil
 }
 
-// --- Tokens ----------------------------------------------------------------
-
 type tokenKind int
 
 const (
 	tokenEnd tokenKind = iota
 	tokenNumber
 	tokenIdent
-	tokenOperator // + - * / ^ ! %
+	tokenOperator
 	tokenLParen
 	tokenRParen
 )
@@ -96,7 +86,7 @@ const (
 type token struct {
 	kind tokenKind
 	text string
-	pos  int // 1-based
+	pos  int
 }
 
 func tokenize(s string) ([]token, error) {
@@ -135,9 +125,7 @@ func tokenize(s string) ([]token, error) {
 	return append(tokens, token{kind: tokenEnd, pos: len(runes) + 1}), nil
 }
 
-// scanNumber returns the end of the number starting at i: digits, an
-// optional fraction and an optional exponent ("1.5e-3"). An "e" not followed
-// by digits is left alone so that it can be read as Euler's number.
+// An "e" not followed by digits is left for Euler's number.
 func scanNumber(runes []rune, i int) int {
 	isDigit := func(j int) bool { return j < len(runes) && unicode.IsDigit(runes[j]) }
 	for isDigit(i) || (i < len(runes) && runes[i] == '.') {
@@ -157,8 +145,6 @@ func scanNumber(runes []rune, i int) int {
 	}
 	return i
 }
-
-// --- Parser ----------------------------------------------------------------
 
 type parser struct {
 	tokens []token
@@ -351,9 +337,6 @@ func (p *parser) primary() (Node, error) {
 	return nil, p.unexpected(t)
 }
 
-// --- Syntax tree -------------------------------------------------------------
-
-// Node is a node of a parsed expression.
 type Node interface {
 	eval(unit AngleUnit) (*apd.Decimal, error)
 }
@@ -412,7 +395,6 @@ func (n *binaryNode) eval(unit AngleUnit) (*apd.Decimal, error) {
 		return nil, err
 	}
 
-	// "a ± b%" adds or subtracts b percent of a.
 	if pct, ok := n.right.(*percentNode); ok && (n.op == "+" || n.op == "-") {
 		p, err := pct.operand.eval(unit)
 		if err != nil {
